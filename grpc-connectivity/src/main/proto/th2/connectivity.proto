@@ -1,0 +1,22 @@
+syntax = "proto3";
+package th2;
+
+option java_multiple_files = true;
+option java_package = "com.exactpro.th2.connectivity.grpc";
+
+service Connectivity {
+    rpc getQueueInfo (QueueRequest) returns (QueueInfo) {}
+}
+
+message QueueRequest {}
+
+message QueueInfo {
+    string exchange_name = 1;
+    string in_msg_queue = 2;
+    string in_raw_msg_queue = 3;
+    string out_msg_queue = 4;
+    string out_raw_msg_queue = 5;
+    string send_msg_queue = 6;
+    string send_raw_msg_queue = 7;
+}
+
