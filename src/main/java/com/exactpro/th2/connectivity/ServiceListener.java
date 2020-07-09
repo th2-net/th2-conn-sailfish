@@ -1,33 +1,16 @@
 /*
  * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * http://www.apache.org/licenses/LICENSE-2.0
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.exactpro.th2;
-
-import com.exactpro.sf.common.messages.IMessage;
-import com.exactpro.sf.externalapi.IServiceListener;
-import com.exactpro.sf.externalapi.IServiceProxy;
-import com.exactpro.sf.services.IdleStatus;
-import com.exactpro.sf.services.ServiceEvent;
-import com.exactpro.sf.services.ServiceHandlerRoute;
-import com.exactpro.th2.common.event.Event;
-import com.exactpro.th2.common.event.EventUtils;
-import com.exactpro.th2.connectivity.utility.EventStoreExtensions;
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
-import com.exactpro.th2.infra.grpc.Direction;
-import com.exactpro.th2.infra.grpc.EventID;
-import com.fasterxml.jackson.core.JsonProcessingException;
+package com.exactpro.th2.connectivity;
 
 import static com.exactpro.th2.infra.grpc.Direction.FIRST;
 import static com.exactpro.th2.infra.grpc.Direction.SECOND;
@@ -40,6 +23,18 @@ import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.exactpro.sf.common.messages.IMessage;
+import com.exactpro.sf.externalapi.IServiceListener;
+import com.exactpro.sf.externalapi.IServiceProxy;
+import com.exactpro.sf.services.IdleStatus;
+import com.exactpro.sf.services.ServiceEvent;
+import com.exactpro.sf.services.ServiceHandlerRoute;
+import com.exactpro.th2.IMessageToProtoConverter;
+import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.event.EventUtils;
+import com.exactpro.th2.eventstore.grpc.EventStoreServiceService;
+import com.exactpro.th2.infra.grpc.Direction;
+
 public class ServiceListener implements IServiceListener {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceListener.class);
@@ -48,17 +43,19 @@ public class ServiceListener implements IServiceListener {
     private final IMessageToProtoConverter converter;
     private final String sessionAlias;
     private final Subscriber<ConnectivityMessage> subscriber;
-    private final EventStoreServiceBlockingStub eventStoreConnector;
-    private final String rootEventID;
+    private final EventStoreServiceService eventStoreConnector;
+//    private final String rootEventID;
 
     public ServiceListener(Map<Direction, AtomicLong> directionToSequence, IMessageToProtoConverter converter, String sessionAlias, Subscriber<ConnectivityMessage> subscriber,
-            EventStoreServiceBlockingStub eventStoreConnector, String rootEventID) {
+            EventStoreServiceService eventStoreConnector
+//            String rootEventID
+    ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.converter = requireNonNull(converter, "Converter can't be null");
         this.sessionAlias = requireNonNull(sessionAlias, "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventStoreConnector = requireNonNull(eventStoreConnector, "Event store connector can't be null");
-        this.rootEventID = requireNonNull(rootEventID, "Root event ID can't be null");
+        //this.rootEventID = requireNonNull(rootEventID, "Root event ID can't be null");
     }
 
     @Override
@@ -90,9 +87,9 @@ public class ServiceListener implements IServiceListener {
                 error = error.getCause();
             } while(error != null);
 
-            EventStoreExtensions.storeEvent(eventStoreConnector, event,
-                    rootEventID);
-        } catch (RuntimeException | JsonProcessingException e) {
+//            EventStoreExtensions.storeEvent(eventStoreConnector, event,
+//                    rootEventID);
+        } catch (RuntimeException e) {
             LOGGER.error("Store event related to internal error failure", e);
         }
     }
