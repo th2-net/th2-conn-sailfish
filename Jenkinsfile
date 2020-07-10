@@ -41,7 +41,6 @@ pipeline {
                     buildFile: 'build.gradle',
                     tasks: "clean build artifactoryPublish ${GRADLE_SWITCHES}",
                     deployerId: "GRADLE_DEPLOYER",
-                    resolverId: "GRADLE_RESOLVER",
                 )
             }
         }
