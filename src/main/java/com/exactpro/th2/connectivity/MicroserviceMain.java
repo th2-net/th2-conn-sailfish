@@ -115,12 +115,12 @@ public class MicroserviceMain {
             FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
 
             EventStoreServiceService eventStore = grpcRouter.getService(EventStoreServiceService.class);
-//
-//            String rootEventID = storeEvent(eventStore, Event.start().endTimestamp()
-//                    .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
-//                    .type("Microservice")).getId();
 
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStore);
+            String rootEventID = storeEvent(eventStore, Event.start().endTimestamp()
+                    .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
+                    .type("Microservice")).getId();
+
+            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStore, rootEventID);
             IServiceProxy serviceProxy = loadService(serviceFactory, servicePath, serviceListener);
             printServiceSetting(serviceProxy);
             IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());

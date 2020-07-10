@@ -32,8 +32,10 @@ import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.IMessageToProtoConverter;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.EventUtils;
+import com.exactpro.th2.connectivity.utility.EventStoreExtensions;
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceService;
 import com.exactpro.th2.infra.grpc.Direction;
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 public class ServiceListener implements IServiceListener {
 
@@ -44,18 +46,18 @@ public class ServiceListener implements IServiceListener {
     private final String sessionAlias;
     private final Subscriber<ConnectivityMessage> subscriber;
     private final EventStoreServiceService eventStoreConnector;
-//    private final String rootEventID;
+    private final String rootEventID;
 
     public ServiceListener(Map<Direction, AtomicLong> directionToSequence, IMessageToProtoConverter converter, String sessionAlias, Subscriber<ConnectivityMessage> subscriber,
-            EventStoreServiceService eventStoreConnector
-//            String rootEventID
+            EventStoreServiceService eventStoreConnector,
+            String rootEventID
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.converter = requireNonNull(converter, "Converter can't be null");
         this.sessionAlias = requireNonNull(sessionAlias, "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventStoreConnector = requireNonNull(eventStoreConnector, "Event store connector can't be null");
-        //this.rootEventID = requireNonNull(rootEventID, "Root event ID can't be null");
+        this.rootEventID = requireNonNull(rootEventID, "Root event ID can't be null");
     }
 
     @Override
@@ -87,9 +89,9 @@ public class ServiceListener implements IServiceListener {
                 error = error.getCause();
             } while(error != null);
 
-//            EventStoreExtensions.storeEvent(eventStoreConnector, event,
-//                    rootEventID);
-        } catch (RuntimeException e) {
+            EventStoreExtensions.storeEvent(eventStoreConnector, event,
+                    rootEventID);
+        } catch (RuntimeException | JsonProcessingException e) {
             LOGGER.error("Store event related to internal error failure", e);
         }
     }
