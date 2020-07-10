@@ -1,3 +1,16 @@
+/*
+ * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 pipeline {
     agent { label "sailfish" }
     options { timestamps () }
@@ -9,19 +22,23 @@ pipeline {
                             returnStdout: true,
                             script: 'git rev-list --count VERSION-1.1..HEAD'
                             ).trim()}""" //TODO: Calculate revision from a specific tag instead of a root commit
-        TH2_REGISTRY = credentials('TH2_REGISTRY_USER')
-        TH2_REGISTRY_URL = credentials('TH2_REGISTRY')
+        TH2_SCHEMA_REGISTRY = credentials('TH2_SCHEMA_REGISTRY_USER')
+        TH2_SCHEMA_REGISTRY_URL = credentials('TH2_SCHEMA_REGISTRY')
         GRADLE_SWITCHES = " -Pversion_build=${BUILD_NUMBER} -Pversion_maintenance=${VERSION_MAINTENANCE}"
-        GCHAT_WEB_HOOK = credentials('th2-dev-environment-web-hook')
-        GCHAT_THREAD_NAME = credentials('th2-dev-environment-release-docker-images-thread')
     }
     stages {
         stage ('Artifactory configuration') {
             steps {
-                rtGradleDeployer (
-                    id: "GRADLE_DEPLOYER",
-                    serverId: "artifatory5",
-                    repo: "th2-schema-snapshot-local",
+                rtGradleDeployer(
+                        id: "GRADLE_DEPLOYER",
+                        serverId: "artifatory5",
+                        repo: "th2-schema-snapshot-local",
+                )
+
+                rtGradleResolver(
+                        id: "GRADLE_RESOLVER",
+                        serverId: "artifatory5",
+                        repo: "th2-schema-snapshot-local"
                 )
             }
         }
@@ -32,6 +49,7 @@ pipeline {
                 )
             }
         }
+
         stage('Build') {
             steps {
                 rtGradleRun (
@@ -41,6 +59,7 @@ pipeline {
                     buildFile: 'build.gradle',
                     tasks: "clean build artifactoryPublish ${GRADLE_SWITCHES}",
                     deployerId: "GRADLE_DEPLOYER",
+                    resolverId: "GRADLE_RESOLVER",
                 )
             }
         }
@@ -51,10 +70,20 @@ pipeline {
                 )
             }
         }
+        stage('Publish docker') {
+            steps {
+                sh """
+                    docker login -u ${TH2_SCHEMA_REGISTRY_USR} -p ${TH2_SCHEMA_REGISTRY_PSW} ${TH2_SCHEMA_REGISTRY_URL}
+                    ./gradlew dockerPush ${GRADLE_SWITCHES} \
+                    -Ptarget_docker_repository=${TH2_SCHEMA_REGISTRY_URL}
+                """ // TODO: Exec from root repository
+            }
+        }
         stage('Publish report') {
             steps {
                 script {
-                    def sailfishPluginVersion = "${dockerInfoProperties['sailfish-plugin-name'].trim()}:${dockerInfoProperties['sailfish-plugin-version'].trim()}"
+                    def gradleProperties = readProperties  file: 'gradle.properties'
+                    def dockerImageVersion = "${gradleProperties['version_major']}.${gradleProperties['version_minor']}.${VERSION_MAINTENANCE}.${BUILD_NUMBER}"
 
                     def changeLogs = ""
                     try {
@@ -70,19 +99,7 @@ pipeline {
                         println "Exception occurred: ${e}"
                     }
 
-                    def fields = [
-                        "*Job:* <${BUILD_URL}|${JOB_NAME}>",
-                        "*Sailfish plugin version:* ${sailfishPluginVersion}",
-                        "*Changes:*${changeLogs}"
-                    ]
-                    writeJSON file: 'result.json', json: [text: fields.join('\n'), thread: [name: GCHAT_THREAD_NAME]]
-                    try {
-                        sh "curl -s -H 'Content-Type: application/json' -d @result.json '${GCHAT_WEB_HOOK}'"
-                    } catch(e) {
-                        println "Exception occurred: ${e}"
-                    }
-
-                    currentBuild.description += "sailfish-plugin-version = ${sailfishPluginVersion}<br>"
+                    currentBuild.description = "docker-image-version = ${dockerImageVersion}<br>"
                 }
             }
         }

@@ -49,8 +49,7 @@ public class ServiceListener implements IServiceListener {
     private final String rootEventID;
 
     public ServiceListener(Map<Direction, AtomicLong> directionToSequence, IMessageToProtoConverter converter, String sessionAlias, Subscriber<ConnectivityMessage> subscriber,
-            EventStoreServiceService eventStoreConnector,
-            String rootEventID
+            EventStoreServiceService eventStoreConnector, String rootEventID
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.converter = requireNonNull(converter, "Converter can't be null");
