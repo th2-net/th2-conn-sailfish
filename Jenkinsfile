@@ -21,13 +21,7 @@ pipeline {
                 rtGradleDeployer (
                     id: "GRADLE_DEPLOYER",
                     serverId: "artifatory5",
-                    repo: "libs-snapshot-local",
-                )
-
-                rtGradleResolver (
-                    id: "GRADLE_RESOLVER",
-                    serverId: "artifatory5",
-                    repo: "libs-snapshot"
+                    repo: "th2-schema-snapshot-local",
                 )
             }
         }
@@ -38,7 +32,6 @@ pipeline {
                 )
             }
         }
-
         stage('Build') {
             steps {
                 rtGradleRun (
@@ -59,22 +52,10 @@ pipeline {
                 )
             }
         }
-        stage('Docker publish') {
-            steps {
-                sh """
-                    docker login -u ${TH2_REGISTRY_USR} -p ${TH2_REGISTRY_PSW} ${TH2_REGISTRY_URL}
-                    ./gradlew dockerPush -Puse_last_sailfish_plugin ${GRADLE_SWITCHES} \
-                    -Ptarget_docker_repository=${TH2_REGISTRY_URL}
-                    docker logout ${TH2_REGISTRY_URL}
-                """
-            }
-        }
         stage('Publish report') {
             steps {
                 script {
-                    def dockerInfoProperties = readProperties  file: 'sailfish-plugin/build/docker-info/info.properties'
                     def sailfishPluginVersion = "${dockerInfoProperties['sailfish-plugin-name'].trim()}:${dockerInfoProperties['sailfish-plugin-version'].trim()}"
-                    def dockerImageVersion = dockerInfoProperties['docker-image-version'].trim()
 
                     def changeLogs = ""
                     try {
@@ -92,7 +73,6 @@ pipeline {
 
                     def fields = [
                         "*Job:* <${BUILD_URL}|${JOB_NAME}>",
-                        "*Docker image version:* ${dockerImageVersion}",
                         "*Sailfish plugin version:* ${sailfishPluginVersion}",
                         "*Changes:*${changeLogs}"
                     ]
@@ -103,7 +83,6 @@ pipeline {
                         println "Exception occurred: ${e}"
                     }
 
-                    currentBuild.description = "docker-image-version = ${dockerImageVersion}<br>"
                     currentBuild.description += "sailfish-plugin-version = ${sailfishPluginVersion}<br>"
                 }
             }
