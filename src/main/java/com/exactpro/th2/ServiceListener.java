@@ -22,6 +22,7 @@ import com.exactpro.sf.services.IdleStatus;
 import com.exactpro.sf.services.ServiceEvent;
 import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.event.Event.Status;
 import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.connectivity.utility.EventStoreExtensions;
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
@@ -82,6 +83,7 @@ public class ServiceListener implements IServiceListener {
         try {
             Event event = Event.start().endTimestamp()
                     .name("Connection error")
+                    .status(Status.FAILED)
                     .type("Error");
 
             Throwable error = cause;
