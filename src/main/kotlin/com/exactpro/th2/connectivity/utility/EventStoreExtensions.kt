@@ -29,7 +29,7 @@ fun EventStoreServiceService.storeEvent(event: Event, parentEventID: String? = n
         .setEvent(event.toProtoEvent(parentEventID))
         .build())
     if (response.hasError()) {
-        throw RuntimeException("Evnet '" + event.id + "' store failure, reason: " + response.error.value)
+        throw RuntimeException("Event '" + event.id + "' store failure, reason: " + response.error.value)
     }
     LOGGER.debug("Event '{}' sent", event.id)
     return event

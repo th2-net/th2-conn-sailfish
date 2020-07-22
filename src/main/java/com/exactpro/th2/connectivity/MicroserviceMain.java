@@ -19,6 +19,7 @@ import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.c
 import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.getParentEventID;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
+import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 import java.io.File;
@@ -27,6 +28,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,7 +36,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.exactpro.sf.common.services.ServiceName;
+import com.exactpro.sf.comparison.conversion.ConversionException;
+import com.exactpro.sf.comparison.conversion.MultiConverter;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang3.ClassUtils;
 import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,13 +109,12 @@ public class MicroserviceMain {
         ConnectivityConfiguration configuration = factory.getCustomConfiguration(ConnectivityConfiguration.class);
 
         File workspaceFolder = new File(configuration.getWorkspaceFolder());
-        File servicePath = new File(workspaceFolder, configuration.getServiceConfigurationFile());
 
         Map<Direction, AtomicLong> directionToSequence = getActualSequences();
 
         try {
             GrpcRouter grpcRouter = factory.getGrpcRouter();
-            MessageRouter<MessageBatch> parsedMessageBatch = factory.getMessageRouterParsedBatch();
+            MessageRouter<MessageBatch> parsedMessageBatch = (MessageRouter<MessageBatch>) factory.getMessageRouterParsedBatch();
 
             IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
             FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
@@ -121,7 +126,7 @@ public class MicroserviceMain {
                     .type("Microservice")).getId();
 
             IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStore, rootEventID);
-            IServiceProxy serviceProxy = loadService(serviceFactory, servicePath, serviceListener);
+            IServiceProxy serviceProxy = loadService(serviceFactory, configuration, serviceListener);
             printServiceSetting(serviceProxy);
             IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());
             SailfishURI dictionaryURI = serviceProxy.getSettings().getDictionary();
@@ -131,7 +136,7 @@ public class MicroserviceMain {
 
             configureShutdownHook(processor, serviceProxy, messageSender, serviceFactory);
 
-            createPipeline(configuration, processor, eventStore, parsedMessageBatch, factory.getMessageRouterRawBatch())
+            createPipeline(configuration, processor, eventStore, parsedMessageBatch, (MessageRouter<RawMessageBatch>) factory.getMessageRouterRawBatch())
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (Exception e) {
             LOGGER.error(e.getMessage(), e);
@@ -246,12 +251,34 @@ public class MicroserviceMain {
         return now.getEpochSecond() * NANOSECONDS_IN_SECOND + now.getNano();
     }
 
-    private static IServiceProxy loadService(IServiceFactory serviceFactory, File servicePath, IServiceListener serviceListener) {
-        try (InputStream serviceStream = new FileInputStream(servicePath)) {
-            return serviceFactory.createService(serviceStream, serviceListener);
-        } catch (IOException | ServiceFactoryException e) {
-            throw new RuntimeException(String.format("Could not import service %s", servicePath), e);
+    private static IServiceProxy loadService(IServiceFactory serviceFactory,
+                                             ConnectivityConfiguration configuration,
+                                             IServiceListener serviceListener) {
+        try  {
+            IServiceProxy service = serviceFactory.createService(ServiceName.parse(configuration.getName()),
+                    SailfishURI.unsafeParse(configuration.getType()),
+                    serviceListener);
+            ISettingsProxy settings = service.getSettings();
+            for (Entry<String, Object> settingsEntry : configuration.getSettings().entrySet()) {
+                String settingName = settingsEntry.getKey();
+                Object castValue = castValue(settings, settingName, settingsEntry.getValue());
+                settings.setParameterValue(settingName, castValue);
+            }
+            return service;
+        } catch (ConversionException | ServiceFactoryException e) {
+            throw new RuntimeException(String.format("Could not load service '%s'", configuration.getName()), e);
         }
+    }
+
+    private static Object castValue(ISettingsProxy settings, String settingName, Object value) {
+        Class<?> settingType = primitiveToWrapper(settings.getParameterType(settingName));
+        if (SailfishURI.class.isAssignableFrom(settingType)) {
+            return SailfishURI.unsafeParse(value.toString());
+        }
+        if (MultiConverter.SUPPORTED_TYPES.contains(settingType)) {
+            return MultiConverter.convert(value, settingType);
+        }
+        return value;
     }
 
     @SuppressWarnings("ParameterNameDiffersFromOverriddenParameter")

@@ -15,6 +15,8 @@ package com.exactpro.th2.connectivity.configuration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.Map;
+
 public class ConnectivityConfiguration {
     @JsonProperty(value = "session-alias", required = true)
     private String sessionAlias;
@@ -22,8 +24,14 @@ public class ConnectivityConfiguration {
     @JsonProperty(value = "workspace",required = true)
     private String workspaceFolder;
 
-    @JsonProperty(value = "service-config", required = true)
-    private String serviceConfigurationFile;
+    @JsonProperty(required = true)
+    private String type;
+
+    @JsonProperty(required = true)
+    private String name;
+
+    @JsonProperty(required = true)
+    private Map<String, Object> settings;
 
     public String getSessionAlias() {
         return sessionAlias;
@@ -33,7 +41,15 @@ public class ConnectivityConfiguration {
         return workspaceFolder;
     }
 
-    public String getServiceConfigurationFile() {
-        return serviceConfigurationFile;
+    public String getType() {
+        return type;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Map<String, Object> getSettings() {
+        return settings;
     }
 }
