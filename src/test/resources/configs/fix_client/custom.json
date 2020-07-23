@@ -1,6 +1,6 @@
 {
   "session-alias": "fix_client",
-  "workspace": "src/test/workspace",
+  "workspace": "/home/sailfish/workspace",
   "type": "generic:FIX_Client",
   "name": "fix_client",
   "settings": {
