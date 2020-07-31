@@ -15,10 +15,10 @@
  */
 package com.exactpro.th2;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import com.exactpro.th2.infra.grpc.Direction;
 import com.exactpro.th2.infra.grpc.MessageBatch;
@@ -28,36 +28,34 @@ public class ConnectivityBatch {
     private final String sessionAlias;
     private final long sequence;
     private final Direction direction;
-    private final List<ConnectivityMessage> iMessages;
+    private final List<ConnectivityMessage> connectivityMessages;
 
-    public ConnectivityBatch(List<ConnectivityMessage> iMessages) {
-        if (Objects.requireNonNull(iMessages, "Message list can't be null").isEmpty()) {
+    public ConnectivityBatch(List<ConnectivityMessage> connectivityMessages) {
+        if (Objects.requireNonNull(connectivityMessages, "Message list can't be null").isEmpty()) {
             throw new IllegalArgumentException("Message list can't be empty");
         }
 
-        ConnectivityMessage firstMessage = iMessages.get(0);
+        ConnectivityMessage firstMessage = connectivityMessages.get(0);
         this.sessionAlias = firstMessage.getSessionAlias();
         this.direction = firstMessage.getDirection();
-        if (!checkMessages(iMessages, sessionAlias, direction)) {
-            throw new IllegalArgumentException("Message list can't be empty");
-        }
+        checkMessages(connectivityMessages, sessionAlias, direction);
 
-        this.iMessages = List.copyOf(iMessages);
+        this.connectivityMessages = List.copyOf(connectivityMessages);
         this.sequence = firstMessage.getSequence();
     }
 
     public RawMessageBatch convertToProtoRawBatch() {
         return RawMessageBatch.newBuilder()
-                .addAllMessages(iMessages.stream()
-                        .map(iMsg -> iMsg.convertToProtoRawMessage())
+                .addAllMessages(connectivityMessages.stream()
+                        .map(ConnectivityMessage::convertToProtoRawMessage)
                         .collect(Collectors.toList()))
                 .build();
     }
 
     public MessageBatch convertToProtoParsedBatch() {
         return MessageBatch.newBuilder()
-                .addAllMessages(iMessages.stream()
-                        .map(iMsg -> iMsg.convertToProtoParsedMessage())
+                .addAllMessages(connectivityMessages.stream()
+                        .map(ConnectivityMessage::convertToProtoParsedMessage)
                         .collect(Collectors.toList()))
                 .build();
     }
@@ -74,13 +72,26 @@ public class ConnectivityBatch {
         return direction;
     }
 
-    public List<ConnectivityMessage> getiMessages() {
-        return iMessages;
+    public List<ConnectivityMessage> getMessages() {
+        return connectivityMessages;
     }
 
-    private static boolean checkMessages(Collection<ConnectivityMessage> iMessages, String sessionAlias, Direction direction) {
-        return iMessages.stream()
+    private static void checkMessages(List<ConnectivityMessage> iMessages, String sessionAlias, Direction direction) {
+        if (iMessages.isEmpty()) {
+            throw new IllegalArgumentException("List can't be empty");
+        }
+
+        if (!iMessages.stream()
                 .allMatch(iMessage -> Objects.equals(sessionAlias, iMessage.getSessionAlias())
-                        && direction == iMessage.getDirection());
+                        && direction == iMessage.getDirection())) {
+            throw new IllegalArgumentException("List " + iMessages + " has elemnts with incorrect metadata, expected session alias '"+ sessionAlias +"' direction '" + direction + '\'');
+        }
+
+        if (!IntStream.range(0, iMessages.size() - 1)
+                .allMatch(index -> iMessages.get(index).getSequence() + 1 == iMessages.get(index + 1).getSequence())) {
+            throw new IllegalArgumentException("List " + iMessages.stream()
+                    .map(ConnectivityMessage::getSequence)
+                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");
+        }
     }
 }

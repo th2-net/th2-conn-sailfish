@@ -27,7 +27,7 @@ private val LOGGER = LoggerFactory.getLogger("com.exactpro.th2.connectivity.util
 
 @JvmOverloads
 @Throws(JsonProcessingException::class)
-fun EventStoreServiceBlockingStub.storeEvent(event: Event, parentEventID: String? = null): Event {
+fun EventStoreServiceBlockingStub.storeEvent(event: Event, parentEventID: String? = null) {
     val response = storeEvent(StoreEventRequest.newBuilder()
         .setEvent(event.toProtoEvent(parentEventID))
         .build())
@@ -35,5 +35,4 @@ fun EventStoreServiceBlockingStub.storeEvent(event: Event, parentEventID: String
         throw RuntimeException("Evnet '" + event.id + "' store failure, reason: " + response.error.value)
     }
     LOGGER.debug("Event '{}' sent", event.id)
-    return event
 }

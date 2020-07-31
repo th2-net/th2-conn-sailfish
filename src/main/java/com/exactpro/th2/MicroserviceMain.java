@@ -29,6 +29,7 @@ import static com.exactpro.th2.connectivity.utility.MetadataProperty.PARENT_EVEN
 import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.getParentEventID;
 import static io.grpc.ManagedChannelBuilder.forAddress;
+import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
@@ -46,10 +47,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.exactpro.sf.externalapi.*;
-import com.exactpro.th2.infra.grpc.*;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang3.ObjectUtils;
+import com.exactpro.sf.externalapi.IMessageFactoryProxy;
+import com.exactpro.sf.externalapi.IServiceFactory;
+import com.exactpro.sf.externalapi.IServiceListener;
+import com.exactpro.sf.externalapi.IServiceProxy;
+import com.exactpro.sf.externalapi.ISettingsProxy;
+import com.exactpro.sf.externalapi.ServiceFactory;
+
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -67,18 +71,22 @@ import com.exactpro.th2.configuration.Th2Configuration;
 import com.exactpro.th2.connectivity.configuration.Configuration;
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc;
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
+import com.exactpro.th2.infra.grpc.Direction;
+import com.exactpro.th2.infra.grpc.MessageBatch;
+import com.exactpro.th2.infra.grpc.MessageID;
+import com.exactpro.th2.infra.grpc.RawMessageBatch;
 import com.exactpro.th2.mq.ExchnageType;
 import com.exactpro.th2.mq.IMQFactory;
 import com.exactpro.th2.mq.rabbitmq.RabbitMQFactory;
 import com.google.protobuf.MessageLite;
 
 import io.reactivex.rxjava3.annotations.NonNull;
-import io.reactivex.rxjava3.annotations.Nullable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.exceptions.Exceptions;
 import io.reactivex.rxjava3.flowables.ConnectableFlowable;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 
 public class MicroserviceMain {
@@ -115,7 +123,6 @@ public class MicroserviceMain {
 
         try {
             Configuration configuration = getConfiguration();
-            IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
             FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
 
             Th2Configuration th2Configuration = configuration.getTh2Configuration();
@@ -123,10 +130,14 @@ public class MicroserviceMain {
                     th2Configuration.getTh2EventStorageGRPCHost(), th2Configuration.getTh2EventStorageGRPCPort())
                     .usePlaintext().build());
 
-            String rootEventID = storeEvent(eventStoreConnector, Event.start().endTimestamp()
+            Event rootEvent = Event.start().endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
-                    .type("Microservice")).getId();
+                    .type("Microservice");
+            String rootEventID = rootEvent.getId();
 
+            storeEvent(eventStoreConnector, rootEvent);
+
+            IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
             IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStoreConnector, rootEventID);
             IServiceProxy serviceProxy = loadService(serviceFactory, servicePath, serviceListener);
             printServiceSetting(serviceProxy);
@@ -164,16 +175,18 @@ public class MicroserviceMain {
     }
 
     private static @NonNull Flowable<ConnectableFlowable<ConnectivityMessage>> createPipeline(Configuration configuration,
-            Flowable<ConnectivityMessage> processor, EventStoreServiceBlockingStub eventStoreConnector) throws IOException, TimeoutException {
+            Flowable<ConnectivityMessage> processor, EventStoreServiceBlockingStub eventStoreConnector) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-        return processor.groupBy(ConnectivityMessage::getDirection)
+        return processor.observeOn(Schedulers.newThread())
+                .doOnNext(msg -> LOGGER.debug("Start handling message with sequence {}", msg.getSequence()))
+                .groupBy(ConnectivityMessage::getDirection)
                 .map(group -> {
-                    @Nullable Direction direction = group.getKey();
+                    @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
                     ConnectableFlowable<ConnectivityMessage> messageConnectable = group.publish();
 
                     if (direction == Direction.SECOND) {
-                        subscribeToSendMessage(eventStoreConnector, direction, messageConnectable);
+                        subscribeToSendMessage(eventStoreConnector, messageConnectable);
                     }
                     createPackAndPublishPipeline(configuration, direction, messageConnectable);
 
@@ -183,17 +196,20 @@ public class MicroserviceMain {
                 });
     }
 
-    private static void subscribeToSendMessage(EventStoreServiceBlockingStub eventStoreConnector, @Nullable Direction direction, Flowable<ConnectivityMessage> messageConnectable) {
-        messageConnectable.filter(message -> contains(message.getiMessage().getMetaData(), PARENT_EVENT_ID))
+    private static void subscribeToSendMessage(EventStoreServiceBlockingStub eventStoreConnector, Flowable<ConnectivityMessage> messageConnectable) {
+        //noinspection ResultOfMethodCallIgnored
+        messageConnectable.filter(message -> contains(message.getSailfishMessage().getMetaData(), PARENT_EVENT_ID))
                 .subscribe(message -> {
-                    storeEvent(eventStoreConnector, Event.start().endTimestamp()
-                            .name("Send '" + message.getiMessage().getName() + "' message")
+                    Event event = Event.start().endTimestamp()
+                            .name("Send '" + message.getSailfishMessage().getName() + "' message")
                             .type("Send message")
-                            .messageID(message.getMessageID()), getParentEventID(message.getiMessage().getMetaData()).getId());
+                            .messageID(message.getMessageID());
+                    LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), message.getSequence());
+                    storeEvent(eventStoreConnector, event, getParentEventID(message.getSailfishMessage().getMetaData()).getId());
                 });
     }
 
-    private static void createPackAndPublishPipeline(Configuration configuration, @Nullable Direction direction, ConnectableFlowable<ConnectivityMessage> messageConnectable) throws IOException, TimeoutException {
+    private static void createPackAndPublishPipeline(Configuration configuration, @NotNull Direction direction, Flowable<ConnectivityMessage> messageConnectable) throws IOException, TimeoutException {
         Map<ConnectionType, String> routingKeyMap = createRoutingKeyMap(configuration);
         IMQFactory mqFactory = new RabbitMQFactory(
                 configuration.getRabbitMQHost(),
@@ -206,9 +222,16 @@ public class MicroserviceMain {
         LOGGER.info("Map group {}", direction);
         ConnectableFlowable<ConnectivityBatch> batchConnectable = messageConnectable
                 .window(1, TimeUnit.SECONDS, MAX_MESSAGES_COUNT)
-                .flatMap(msgs -> msgs.toList().toFlowable())
+                .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
                 .map(ConnectivityBatch::new)
+                .doOnNext(batch -> {
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug("Batch {}:{} is created", batch.getSequence(), batch.getMessages().stream()
+                                .map(ConnectivityMessage::getSequence)
+                                .collect(Collectors.toList()));
+                    }
+                })
                 .publish();
 
         subscribeToPackAndPublish(routingKeyMap, batchConnectable.map(ConnectivityBatch::convertToProtoRawBatch), mqFactory,
