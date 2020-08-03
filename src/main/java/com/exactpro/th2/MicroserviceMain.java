@@ -29,6 +29,7 @@ import static com.exactpro.th2.connectivity.utility.MetadataProperty.PARENT_EVEN
 import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.getParentEventID;
 import static io.grpc.ManagedChannelBuilder.forAddress;
+import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
@@ -78,12 +79,15 @@ import com.exactpro.th2.infra.grpc.RawMessageBatch;
 import com.exactpro.th2.mq.ExchnageType;
 import com.exactpro.th2.mq.IMQFactory;
 import com.exactpro.th2.mq.rabbitmq.RabbitMQFactory;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.MessageLite;
 
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
+import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.exceptions.Exceptions;
 import io.reactivex.rxjava3.flowables.ConnectableFlowable;
+import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
 import io.reactivex.rxjava3.schedulers.Schedulers;
@@ -91,9 +95,14 @@ import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 
 public class MicroserviceMain {
     private static final Logger LOGGER = LoggerFactory.getLogger(MicroserviceMain.class);
+
+
     public static final long NANOSECONDS_IN_SECOND = 1_000_000_000L;
     public static final String PASSWORD_PARAMETER = "password";
     public static final String DEFAULT_PASSWORD_PARAMETER = "default";
+
+    private static final Scheduler PIPELINE_SCHEDULER = createSingleScheduler(new ThreadFactoryBuilder()
+            .setNameFormat("Pipeline-%d").build());
 
     /**
      * Configures External API Sailfish by passed service setting file
@@ -178,7 +187,7 @@ public class MicroserviceMain {
             Flowable<ConnectivityMessage> processor, EventStoreServiceBlockingStub eventStoreConnector) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-        return processor.observeOn(Schedulers.newThread())
+        return processor.observeOn(PIPELINE_SCHEDULER)
                 .doOnNext(msg -> LOGGER.debug("Start handling message with sequence {}", msg.getSequence()))
                 .groupBy(ConnectivityMessage::getDirection)
                 .map(group -> {
@@ -221,7 +230,7 @@ public class MicroserviceMain {
 
         LOGGER.info("Map group {}", direction);
         ConnectableFlowable<ConnectivityBatch> batchConnectable = messageConnectable
-                .window(1, TimeUnit.SECONDS, MAX_MESSAGES_COUNT)
+                .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, MAX_MESSAGES_COUNT)
                 .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
                 .map(ConnectivityBatch::new)
@@ -287,7 +296,11 @@ public class MicroserviceMain {
                             } catch (Exception e) {
                                 LOGGER.error("Service factory closing is failure", e);
                             } finally {
-                                subscriber.onComplete();
+                                try {
+                                    subscriber.onComplete();
+                                } finally {
+                                    PIPELINE_SCHEDULER.shutdown();
+                                }
                             }
                         }
                     }

@@ -20,11 +20,16 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.exactpro.th2.infra.grpc.Direction;
 import com.exactpro.th2.infra.grpc.MessageBatch;
 import com.exactpro.th2.infra.grpc.RawMessageBatch;
 
 public class ConnectivityBatch {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityBatch.class);
+
     private final String sessionAlias;
     private final long sequence;
     private final Direction direction;
@@ -89,9 +94,16 @@ public class ConnectivityBatch {
 
         if (!IntStream.range(0, iMessages.size() - 1)
                 .allMatch(index -> iMessages.get(index).getSequence() + 1 == iMessages.get(index + 1).getSequence())) {
-            throw new IllegalArgumentException("List " + iMessages.stream()
-                    .map(ConnectivityMessage::getSequence)
-                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");
+            if (LOGGER.isErrorEnabled()) {
+                LOGGER.error("List {} hasn't elements with incremental sequence with one step", iMessages.stream()
+                                            .map(ConnectivityMessage::getSequence)
+                                            .collect(Collectors.toList()));
+            }
+
+            // FIXME: Replace logging to thowing exception after solving message reordering problem
+//            throw new IllegalArgumentException("List " + iMessages.stream()
+//                    .map(ConnectivityMessage::getSequence)
+//                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");
         }
     }
 }
