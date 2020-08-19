@@ -23,9 +23,7 @@ import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -36,16 +34,15 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.exactpro.sf.common.services.ServiceName;
-import com.exactpro.sf.comparison.conversion.ConversionException;
-import com.exactpro.sf.comparison.conversion.MultiConverter;
 import org.apache.commons.cli.ParseException;
-import org.apache.commons.lang3.ClassUtils;
 import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure;
+import com.exactpro.sf.common.services.ServiceName;
+import com.exactpro.sf.comparison.conversion.ConversionException;
+import com.exactpro.sf.comparison.conversion.MultiConverter;
 import com.exactpro.sf.configuration.suri.SailfishURI;
 import com.exactpro.sf.externalapi.IMessageFactoryProxy;
 import com.exactpro.sf.externalapi.IServiceFactory;
@@ -64,6 +61,7 @@ import com.exactpro.th2.eventstore.grpc.EventStoreServiceService;
 import com.exactpro.th2.infra.grpc.Direction;
 import com.exactpro.th2.infra.grpc.MessageBatch;
 import com.exactpro.th2.infra.grpc.RawMessageBatch;
+import com.exactpro.th2.schema.dictionary.DictionaryType;
 import com.exactpro.th2.schema.factory.CommonFactory;
 import com.exactpro.th2.schema.grpc.router.GrpcRouter;
 import com.exactpro.th2.schema.message.MessageRouter;
@@ -86,9 +84,6 @@ public class MicroserviceMain {
     /**
      * Configures External API Sailfish by passed service setting file
      * Runs configured service and listen gRPC requests
-     * @param args:
-     *  0 - path to workspace with Sailfish plugin
-     *  1 - path to service settings file
      * Environment variables:
      *  {@link com.exactpro.th2.configuration.Configuration#ENV_GRPC_PORT}
      *  {@link RabbitMQConfiguration#ENV_RABBITMQ_HOST}
@@ -117,22 +112,41 @@ public class MicroserviceMain {
             MessageRouter<MessageBatch> parsedMessageBatch = (MessageRouter<MessageBatch>) factory.getMessageRouterParsedBatch();
 
             IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
+
+            Exception dictionaryException = new Exception("Can not read any dictionaries");
+
+            DictionaryType[] dictionariesTypes = DictionaryType.values();
+            SailfishURI senderDictionaryURI = null;
+            for (DictionaryType value : dictionariesTypes) {
+                try {
+                    SailfishURI tmp = serviceFactory.registerDictionary(value.name(), factory.readDictionary(value), true);
+                    if (configuration.getSenderDictionaryType() == value) {
+                        senderDictionaryURI = tmp;
+                    }
+                } catch (Exception e) {
+                    dictionaryException.addSuppressed(e);
+                }
+            }
+
+            if (dictionaryException.getSuppressed().length >= dictionariesTypes.length) {
+                throw dictionaryException;
+            }
+
             FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
 
             EventStoreServiceService eventStore = grpcRouter.getService(EventStoreServiceService.class);
 
-            String rootEventID = storeEvent(eventStore, Event.start().endTimestamp()
+            String rootEventID = "123"; /* storeEvent(eventStore, Event.start().endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
-                    .type("Microservice")).getId();
+                    .type("Microservice")).getId();*/
 
             IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStore, rootEventID);
             IServiceProxy serviceProxy = loadService(serviceFactory, configuration, serviceListener);
             printServiceSetting(serviceProxy);
             IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());
-            SailfishURI dictionaryURI = serviceProxy.getSettings().getDictionary();
-            IDictionaryStructure dictionary = serviceFactory.getDictionary(dictionaryURI);
+            IDictionaryStructure dictionary = serviceFactory.getDictionary(senderDictionaryURI);
 
-            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, dictionaryURI), parsedMessageBatch);
+            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch);
 
             configureShutdownHook(processor, serviceProxy, messageSender, serviceFactory);
 
@@ -272,6 +286,11 @@ public class MicroserviceMain {
 
     private static Object castValue(ISettingsProxy settings, String settingName, Object value) {
         Class<?> settingType = primitiveToWrapper(settings.getParameterType(settingName));
+
+        if (settingType == null) {
+            throw new IllegalArgumentException("Can not find setting '" + settingName + "' in service");
+        }
+
         if (SailfishURI.class.isAssignableFrom(settingType)) {
             return SailfishURI.unsafeParse(value.toString());
         }

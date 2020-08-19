@@ -13,9 +13,10 @@
 
 package com.exactpro.th2.connectivity.configuration;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.util.Map;
+
+import com.exactpro.th2.schema.dictionary.DictionaryType;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class ConnectivityConfiguration {
     @JsonProperty(value = "session-alias", required = true)
@@ -32,6 +33,9 @@ public class ConnectivityConfiguration {
 
     @JsonProperty(required = true)
     private Map<String, Object> settings;
+
+    @JsonProperty(value="senderDictionary")
+    private DictionaryType senderDictionaryType = DictionaryType.SINGLE;
 
     public String getSessionAlias() {
         return sessionAlias;
@@ -51,5 +55,9 @@ public class ConnectivityConfiguration {
 
     public Map<String, Object> getSettings() {
         return settings;
+    }
+
+    public DictionaryType getSenderDictionaryType() {
+        return senderDictionaryType;
     }
 }
