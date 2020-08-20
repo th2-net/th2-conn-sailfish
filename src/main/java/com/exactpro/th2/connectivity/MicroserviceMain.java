@@ -136,9 +136,9 @@ public class MicroserviceMain {
 
             EventStoreServiceService eventStore = grpcRouter.getService(EventStoreServiceService.class);
 
-            String rootEventID = "123"; /* storeEvent(eventStore, Event.start().endTimestamp()
+            String rootEventID = storeEvent(eventStore, Event.start().endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
-                    .type("Microservice")).getId();*/
+                    .type("Microservice")).getId();
 
             IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStore, rootEventID);
             IServiceProxy serviceProxy = loadService(serviceFactory, configuration, serviceListener);
