@@ -13,6 +13,8 @@
 package com.exactpro.th2.connectivity;
 
 import static com.exactpro.cradle.messages.StoredMessageBatch.MAX_MESSAGES_COUNT;
+import static com.exactpro.sf.externalapi.DictionaryType.MAIN;
+import static com.exactpro.sf.externalapi.DictionaryType.OUTGOING;
 import static com.exactpro.th2.connectivity.utility.EventStoreExtensions.storeEvent;
 import static com.exactpro.th2.connectivity.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.contains;
@@ -24,6 +26,7 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -113,25 +116,6 @@ public class MicroserviceMain {
 
             IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
 
-            Exception dictionaryException = new Exception("Can not read any dictionaries");
-
-            DictionaryType[] dictionariesTypes = DictionaryType.values();
-            SailfishURI senderDictionaryURI = null;
-            for (DictionaryType value : dictionariesTypes) {
-                try {
-                    SailfishURI tmp = serviceFactory.registerDictionary(value.name(), factory.readDictionary(value), true);
-                    if (configuration.getSenderDictionaryType() == value) {
-                        senderDictionaryURI = tmp;
-                    }
-                } catch (Exception e) {
-                    dictionaryException.addSuppressed(e);
-                }
-            }
-
-            if (dictionaryException.getSuppressed().length >= dictionariesTypes.length) {
-                throw dictionaryException;
-            }
-
             FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
 
             EventStoreServiceService eventStore = grpcRouter.getService(EventStoreServiceService.class);
@@ -141,9 +125,11 @@ public class MicroserviceMain {
                     .type("Microservice")).getId();
 
             IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStore, rootEventID);
-            IServiceProxy serviceProxy = loadService(serviceFactory, configuration, serviceListener);
+            IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             printServiceSetting(serviceProxy);
             IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());
+            com.exactpro.sf.externalapi.DictionaryType dictionaryType = serviceProxy.getSettings().getDictionaryTypes().contains(OUTGOING) ? OUTGOING : MAIN;
+            SailfishURI senderDictionaryURI = serviceProxy.getSettings().getDictionary(dictionaryType);
             IDictionaryStructure dictionary = serviceFactory.getDictionary(senderDictionaryURI);
 
             MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch);
@@ -265,19 +251,30 @@ public class MicroserviceMain {
         return now.getEpochSecond() * NANOSECONDS_IN_SECOND + now.getNano();
     }
 
-    private static IServiceProxy loadService(IServiceFactory serviceFactory,
-                                             ConnectivityConfiguration configuration,
-                                             IServiceListener serviceListener) {
-        try  {
+    // this method is public for test purposes
+    public static IServiceProxy loadService(IServiceFactory serviceFactory,
+            CommonFactory commonFactory,
+            ConnectivityConfiguration configuration,
+            IServiceListener serviceListener) {
+        try {
             IServiceProxy service = serviceFactory.createService(ServiceName.parse(configuration.getName()),
                     SailfishURI.unsafeParse(configuration.getType()),
                     serviceListener);
+
             ISettingsProxy settings = service.getSettings();
+
             for (Entry<String, Object> settingsEntry : configuration.getSettings().entrySet()) {
                 String settingName = settingsEntry.getKey();
                 Object castValue = castValue(settings, settingName, settingsEntry.getValue());
                 settings.setParameterValue(settingName, castValue);
             }
+
+            for (com.exactpro.sf.externalapi.DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
+                InputStream stream = commonFactory.readDictionary(DictionaryType.valueOf(sfDictionaryType.name()));
+                SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
+                settings.setDictionary(sfDictionaryType, uri);
+            }
+
             return service;
         } catch (ConversionException | ServiceFactoryException e) {
             throw new RuntimeException(String.format("Could not load service '%s'", configuration.getName()), e);
