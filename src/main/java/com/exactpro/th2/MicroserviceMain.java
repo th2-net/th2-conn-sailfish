@@ -40,7 +40,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.Deque;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -48,23 +50,23 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.commons.lang3.builder.EqualsBuilder;
+import org.apache.commons.lang3.builder.HashCodeBuilder;
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.exactpro.sf.common.messages.structures.IDictionaryStructure;
+import com.exactpro.sf.configuration.suri.SailfishURI;
+import com.exactpro.sf.configuration.suri.SailfishURIException;
+import com.exactpro.sf.configuration.workspace.WorkspaceSecurityException;
 import com.exactpro.sf.externalapi.IMessageFactoryProxy;
 import com.exactpro.sf.externalapi.IServiceFactory;
 import com.exactpro.sf.externalapi.IServiceListener;
 import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.sf.externalapi.ISettingsProxy;
 import com.exactpro.sf.externalapi.ServiceFactory;
-
-import org.apache.commons.lang3.builder.EqualsBuilder;
-import org.apache.commons.lang3.builder.HashCodeBuilder;
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.jetbrains.annotations.NotNull;
-import org.reactivestreams.Subscriber;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.exactpro.sf.common.messages.structures.IDictionaryStructure;
-import com.exactpro.sf.configuration.suri.SailfishURI;
 import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.configuration.RabbitMQConfiguration;
@@ -87,10 +89,8 @@ import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.exceptions.Exceptions;
 import io.reactivex.rxjava3.flowables.ConnectableFlowable;
-import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
-import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 
 public class MicroserviceMain {
@@ -120,19 +120,33 @@ public class MicroserviceMain {
      *  {@link Th2Configuration#ENV_RABBITMQ_EXCHANGE_NAME_TH2_CONNECTIVITY}
      */
     public static void main(String[] args) {
-        if (args.length < 2) {
-            throw new IllegalArgumentException("Args is empty. Must have at least three parameters " +
-                    "with path to workspace folder, service configuration");
-        }
-
-        File workspaceFolder = new File(args[0]);
-        File servicePath = new File(workspaceFolder, args[1]);
-
-        Map<Direction, AtomicLong> directionToSequence = getActualSequences();
-
+        Disposer disposer = new Disposer();
+        Runtime.getRuntime().addShutdownHook(new Thread(disposer::dispose, "Shutdown hook"));
+        int exitCode = 0;
         try {
+            if (args.length < 2) {
+                LOGGER.error("Args is empty. Must have at least three parameters " +
+                        "with path to workspace folder, service configuration");
+                exitCode = 1;
+                return;
+            }
+
+            File workspaceFolder = new File(args[0]);
+            File servicePath = new File(workspaceFolder, args[1]);
+
+            Map<Direction, AtomicLong> directionToSequence = getActualSequences();
+
+            disposer.register(() -> {
+                LOGGER.info("Shutdown pipeline scheduler");
+                PIPELINE_SCHEDULER.shutdown();
+            });
+
             Configuration configuration = getConfiguration();
             FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
+            disposer.register(() -> {
+                LOGGER.info("Complite pipeline publisher");
+                processor.onComplete();
+            });
 
             Th2Configuration th2Configuration = configuration.getTh2Configuration();
             EventStoreServiceBlockingStub eventStoreConnector = EventStoreServiceGrpc.newBlockingStub(forAddress(
@@ -147,24 +161,42 @@ public class MicroserviceMain {
             storeEvent(eventStoreConnector, rootEvent);
 
             IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
+            disposer.register(() -> {
+                LOGGER.info("Close service factory");
+                serviceFactory.close();
+            });
             IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStoreConnector, rootEventID);
             IServiceProxy serviceProxy = loadService(serviceFactory, servicePath, serviceListener);
+            disposer.register(() -> {
+                LOGGER.info("Stop service proxy");
+                serviceProxy.stop();
+            });
             printServiceSetting(serviceProxy);
             IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());
             SailfishURI dictionaryURI = serviceProxy.getSettings().getDictionary();
             IDictionaryStructure dictionary = serviceFactory.getDictionary(dictionaryURI);
 
-            ConnectivityGrpsServer server = new ConnectivityGrpsServer(configuration,
-                    new ConnectivityHandler(configuration));
             MessageSender messageSender = new MessageSender(serviceProxy, configuration, eventStoreConnector,
                     new ProtoToIMessageConverter(messageFactory, dictionary, dictionaryURI));
-
-            configureShutdownHook(processor, serviceProxy, server, messageSender, serviceFactory);
+            disposer.register(() -> {
+                LOGGER.info("Stop 'message send' listener");
+                messageSender.stop();
+            });
+            ConnectivityGrpsServer server = new ConnectivityGrpsServer(configuration,
+                    new ConnectivityHandler(configuration));
+            disposer.register(() -> {
+                LOGGER.info("Stop gRPC server");
+                server.stop();
+            });
 
             createPipeline(configuration, processor, eventStoreConnector)
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, server, messageSender));
-        } catch (Exception e) {
-            LOGGER.error(e.getMessage(), e);
+        } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
+        } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
+        } catch (IllegalArgumentException e) { LOGGER.error(e.getMessage(), e); exitCode = 4;
+        } catch (RuntimeException e) { LOGGER.error(e.getMessage(), e); exitCode = 5;
+        } finally {
+            System.exit(exitCode); // Initiate close JVM with all resource leaks.
         }
     }
 
@@ -274,43 +306,33 @@ public class MicroserviceMain {
         LOGGER.info("Subscribed to transfer '{}' batch group {}", contentType, direction);
     }
 
-    private static void configureShutdownHook(Subscriber<ConnectivityMessage> subscriber, IServiceProxy serviceProxy, ConnectivityGrpsServer server, MessageSender messageSender,
-            AutoCloseable serviceFactory) {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try {
+    private interface Disposable {
+        void dispose() throws Exception;
+    }
+
+    private static class Disposer {
+
+        private final Deque<Disposable> disposableQueue = new ConcurrentLinkedDeque<>();
+
+        public void register(Disposable disposable) {
+            disposableQueue.push(disposable);
+        }
+        /**
+         * Disposes registered resources in LIFO order.
+         */
+        public void dispose() {
+            LOGGER.info("Disposing ...");
+
+            for (Disposable disposable : disposableQueue) {
                 try {
-                    server.stop();
-                } finally {
-                    try {
-                        messageSender.stop();
-                    } catch (IOException e) {
-                        LOGGER.error("Message sender stopping is failure", e);
-                    } finally {
-                        try {
-                            LOGGER.info("Stop internal service");
-                            serviceProxy.stop();
-                        } finally {
-                            try {
-                                LOGGER.info("Stop service factory");
-                                serviceFactory.close();
-                            } catch (Exception e) {
-                                LOGGER.error("Service factory closing is failure", e);
-                            } finally {
-                                try {
-                                    subscriber.onComplete();
-                                } finally {
-                                    PIPELINE_SCHEDULER.shutdown();
-                                }
-                            }
-                        }
-                    }
+                    disposable.dispose();
+                } catch (Exception e) {
+                    LOGGER.error(e.getMessage(), e);
                 }
-            } catch (InterruptedException e) {
-                LOGGER.error("Shutdown hook interrupted", e);
-            } catch (RuntimeException e) {
-                LOGGER.error("Shutdown hook failure", e);
             }
-        }, "Shutdown hook"));
+
+            LOGGER.info("Disposed");
+        }
     }
 
     @NotNull
