@@ -115,7 +115,7 @@ public class RabbitMQFactory implements IMQFactory {
                 LOGGER.debug("Data size '{}' is published to queue '{}:{}'", bytes.length, exchangeName, routingKey);
             } catch (IOException e) {
                 LOGGER.error("Publication to RabbitMQ failure '{}'", this, e);
-                Exceptions.propagate(e);
+                close();
             }
         }
 
@@ -145,7 +145,8 @@ public class RabbitMQFactory implements IMQFactory {
                 channel.close();
             } catch (IOException | TimeoutException e) {
                 LOGGER.error("RabbitMQ channel closing failure", e);
-                Exceptions.propagate(e);
+            } finally {
+                cancel();
             }
         }
     }

@@ -83,7 +83,7 @@ compileKotlin {
 dependencies {
     compile(project(':grpc-connectivity'))
 
-    compile group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
+    compile group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.6'
 
     compile "com.rabbitmq:amqp-client:5.8.0"
     compile "com.datastax.cassandra:cassandra-driver-core:${cassandra_version}"//FIXME: Migrate to another library for UUID

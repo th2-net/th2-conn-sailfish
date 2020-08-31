@@ -215,8 +215,8 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<ConnectableFlowable<ConnectivityMessage>> createPipeline(Configuration configuration,
-            Flowable<ConnectivityMessage> processor, EventStoreServiceBlockingStub eventStoreConnector) {
+    private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(Configuration configuration,
+            FlowableProcessor<ConnectivityMessage> processor, EventStoreServiceBlockingStub eventStoreConnector) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
         return processor.observeOn(PIPELINE_SCHEDULER)
@@ -224,14 +224,15 @@ public class MicroserviceMain {
                 .groupBy(ConnectivityMessage::getDirection)
                 .map(group -> {
                     @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
-                    ConnectableFlowable<ConnectivityMessage> messageConnectable = group.publish();
+                    Flowable<ConnectivityMessage> messageConnectable = group
+                            .doOnCancel(processor::onComplete)
+                            .publish()
+                            .refCount(direction == Direction.SECOND ? 2 : 1);
 
                     if (direction == Direction.SECOND) {
                         subscribeToSendMessage(eventStoreConnector, messageConnectable);
                     }
                     createPackAndPublishPipeline(configuration, direction, messageConnectable);
-
-                    messageConnectable.connect();
 
                     return messageConnectable;
                 });
@@ -261,7 +262,7 @@ public class MicroserviceMain {
         String exchangeName = configuration.getExchangeName();
 
         LOGGER.info("Map group {}", direction);
-        ConnectableFlowable<ConnectivityBatch> batchConnectable = messageConnectable
+        Flowable<ConnectivityBatch> batchConnectable = messageConnectable
                 .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, MAX_MESSAGES_COUNT)
                 .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
@@ -273,7 +274,8 @@ public class MicroserviceMain {
                                 .collect(Collectors.toList()));
                     }
                 })
-                .publish();
+                .publish()
+                .refCount(2);
 
         subscribeToPackAndPublish(routingKeyMap, batchConnectable.map(ConnectivityBatch::convertToProtoRawBatch), mqFactory,
                 direction, exchangeName, ContentType.RAW,
@@ -287,7 +289,6 @@ public class MicroserviceMain {
                 MessageBatch::getMessagesCount);
         LOGGER.info("Subscribed to transfer parsed batch group {}", direction);
 
-        batchConnectable.connect();
         LOGGER.info("Connected to publish batches group {}", direction);
     }
 
