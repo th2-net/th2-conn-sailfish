@@ -47,6 +47,7 @@ import com.exactpro.sf.common.services.ServiceName;
 import com.exactpro.sf.comparison.conversion.ConversionException;
 import com.exactpro.sf.comparison.conversion.MultiConverter;
 import com.exactpro.sf.configuration.suri.SailfishURI;
+import com.exactpro.sf.configuration.suri.SailfishURIUtils;
 import com.exactpro.sf.externalapi.IMessageFactoryProxy;
 import com.exactpro.sf.externalapi.IServiceFactory;
 import com.exactpro.sf.externalapi.IServiceListener;
@@ -258,7 +259,7 @@ public class MicroserviceMain {
             IServiceListener serviceListener) {
         try {
             IServiceProxy service = serviceFactory.createService(ServiceName.parse(configuration.getName()),
-                    SailfishURI.unsafeParse(configuration.getType()),
+                    SailfishURI.unsafeParse(SailfishURIUtils.sanitize(configuration.getType())),
                     serviceListener);
 
             ISettingsProxy settings = service.getSettings();
