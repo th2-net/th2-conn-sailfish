@@ -48,7 +48,7 @@ public class MessageSender {
             throw new IllegalStateException("Already subscribe");
         }
 
-        subscriberMonitor = router.subscribe(this::handle, "send", "parsed");
+        subscriberMonitor = router.subscribeAll(this::handle, "send", "parsed");
     }
 
     public void stop() throws IOException {
