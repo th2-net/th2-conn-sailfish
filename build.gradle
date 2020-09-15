@@ -13,7 +13,7 @@ allprojects {
     ext {
         sharedDir                       = file("${project.rootDir}/shared")
 
-        connectivityDockerImageVersion  = "${version_major}.${version_minor}.${version_maintenance}.${version_build}"
+        connectivityDockerImageVersion  = release_version
     }
 
     group = 'com.exactpro.th2'
