@@ -1,4 +1,0 @@
-ARG SOURCE_DOCKER_VERSION=0.0-latest
-FROM th2-connectivity:$SOURCE_DOCKER_VERSION
-WORKDIR /home
-COPY ./ .
