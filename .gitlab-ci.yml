@@ -3,8 +3,7 @@ variables:
   MAJOR_VERSION: "1"
   MINOR_VERSION: "2"
   MAINTENANCE_VERSION: "0"
-  INSPECTION_ENABLED: 'true'
-  ARTIFACTORY_PUBLISH: 'true'
+  ARTIFACTORY_PUBLISH_ENABLED: 'true'
 
 include:
   - project: 'vivarium/th2/pipelines'
