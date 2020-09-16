@@ -11,5 +11,5 @@ ENV RABBITMQ_HOST=rabbitmq \
     RABBITMQ_VHOST=th2 \
     GRPC_PORT=8080
 WORKDIR /home
-COPY --from=build ./ .
-ENTRYPOINT ["/home/connectivity-service/bin/connectivity-service", "/home/sailfish/workspace", "service.xml"]
+COPY --from=build /home/gradle/build/docker .
+ENTRYPOINT ["/home/service/bin/service", "/home/sailfish/workspace", "service.xml"]

@@ -1,2 +1,4 @@
-include "sailfish-plugin"
+rootProject.name = 'th2-connectivity'
+
 include "grpc-connectivity"
+project(':grpc-connectivity').name = 'th2-grpc-connectivity'
