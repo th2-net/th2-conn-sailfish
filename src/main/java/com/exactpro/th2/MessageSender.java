@@ -22,6 +22,7 @@ import com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions;
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
 import com.exactpro.th2.infra.grpc.Message;
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.TextFormat;
 import com.rabbitmq.client.Delivery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +61,9 @@ public class MessageSender {
     private void processMessageFromQueue(String consumerTag, Delivery delivery) {
         try {
             Message protoMessage = Message.parseFrom(delivery.getBody());
+            if (logger.isDebugEnabled()) {
+                logger.debug("Process message to send " + TextFormat.shortDebugString(protoMessage));
+            }
             IMessage message = protoToIMessageConverter.fromProtoMessage(protoMessage, true);
             if (protoMessage.hasParentEventId()) {
                 setParentEventID(message.getMetaData(), protoMessage.getParentEventId());
