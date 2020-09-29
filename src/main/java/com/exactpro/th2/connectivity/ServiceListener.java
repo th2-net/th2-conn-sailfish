@@ -1,9 +1,12 @@
 /*
  * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,9 +31,11 @@ import com.exactpro.sf.externalapi.IServiceListener;
 import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.sf.services.IdleStatus;
 import com.exactpro.sf.services.ServiceEvent;
+import com.exactpro.sf.services.ServiceEvent.Level;
 import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.IMessageToProtoConverter;
 import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.event.Event.Status;
 import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.connectivity.utility.EventStoreExtensions;
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceService;
@@ -80,6 +85,7 @@ public class ServiceListener implements IServiceListener {
         try {
             Event event = Event.start().endTimestamp()
                     .name("Connection error")
+                    .status(Status.FAILED)
                     .type("Error");
 
             Throwable error = cause;
@@ -104,8 +110,19 @@ public class ServiceListener implements IServiceListener {
     }
 
     @Override
-    public void onEvent(IServiceProxy service, ServiceEvent event) {
-        // TODO: Transfer to event storage
-        LOGGER.info("Session '{}' emitted event '{}'", sessionAlias, event);
+    public void onEvent(IServiceProxy service, ServiceEvent serviceEvent) {
+        LOGGER.info("Session '{}' emitted service event '{}'", sessionAlias, serviceEvent);
+        try {
+            Event event = Event.start().endTimestamp()
+                    .name(serviceEvent.getMessage())
+                    .status(serviceEvent.getLevel() == Level.ERROR ? Status.FAILED : Status.PASSED)
+                    .type("Service event")
+                    .description(serviceEvent.getDetails());
+
+            EventStoreExtensions.storeEvent(eventStoreConnector, event,
+                    rootEventID);
+        } catch (RuntimeException | JsonProcessingException e) {
+            LOGGER.error("Store event related to internal event failure", e);
+        }
     }
 }

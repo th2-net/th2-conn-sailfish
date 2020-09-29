@@ -1,9 +1,12 @@
 /*
  * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,16 +24,16 @@ plugins {
 
 allprojects {
     apply plugin: 'base'
+    apply plugin: 'maven-publish'
     apply plugin: 'com.jfrog.artifactory'
+    apply plugin: 'java-library'
 
     ext {
         sharedDir                       = file("${project.rootDir}/shared")
-
-        connectivityDockerImageVersion  = "${version_major}.${version_minor}.${version_maintenance}.${version_build}"
     }
 
     group = 'com.exactpro.th2'
-    version = "${version_major}.${version_minor}-SNAPSHOT"
+    version = release_version
 
     repositories {
         maven {
@@ -47,6 +50,10 @@ allprojects {
             name 'Artifactory snapshot'
             url 'http://artifactory5.exp.exactpro.com/artifactory/libs-snapshot'
         }
+        maven {
+            name 'Artifactory release'
+            url 'http://artifactory5.exp.exactpro.com/artifactory/libs-release-local'
+        }
         mavenLocal()
         
 
@@ -56,10 +63,48 @@ allprojects {
         }
     }
 
-    artifactoryPublish.skip = true
+    dependencies {
+        api platform('com.exactpro.th2:th2-bom:1.0.0-schema-ci.+')
+    }
+
+
+    jar {
+        manifest {
+            attributes(
+                    'Created-By':               "${System.getProperty('java.version')} (${System.getProperty('java.vendor')})",
+                    'Specification-Title':      '',
+                    'Specification-Vendor':     'Exactpro Systems LLC',
+                    'Implementation-Title':     project.archivesBaseName,
+                    'Implementation-Vendor':    'Exactpro Systems LLC',
+                    'Implementation-Vendor-Id': 'com.exactpro',
+                    'Implementation-Version':   project.version
+            )
+        }
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+            }
+        }
+
+        repositories {
+            maven {
+                name = 'localRepo'
+                url = sharedDir
+            }
+        }
+    }
 
     artifactory {
         publish {
+            contextUrl = "${artifactory_url}"
+            repository {
+                repoKey = "${artifactory_deploy_repo_key}" // The Artifactory repository key to publish to
+                username = "${artifactory_user}" // The publisher user name
+                password = "${artifactory_password}" // The publisher password
+            }
             defaults {
                 // Reference to Gradle publications defined in the build script.
                 // This is how we tell the Artifactory Plugin which artifacts should be
@@ -77,20 +122,11 @@ allprojects {
 apply plugin: 'kotlin'
 apply plugin: 'application'
 apply plugin: 'com.palantir.docker'
+apply plugin: 'java-library'
 
 ext {
     sailfishVersion                 = '3.2-SNAPSHOT'
-
-    slf4jVersion        = '1.7.30'
-    th2CommonVersion    = '1.1-SNAPSHOT'
-
-    cradleVersion       = '1.3-SNAPSHOT'
-    cassandra_version   = '3.6.0' //FIXME: Migrate to another library for UUID
-
-    dockerImageVersion  = "${version_major}.${version_minor}.${version_maintenance}.${version_build}"
 }
-
-archivesBaseName = 'connectivity-service'
 
 sourceCompatibility = 1.11
 targetCompatibility = 1.11
@@ -100,33 +136,37 @@ compileKotlin {
 }
 
 dependencies {
-    compile(project(':grpc-connectivity'))
+    implementation(project(':th2-grpc-connectivity'))
 
-    compile group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
+    implementation "com.exactpro.th2:th2-common"
+    implementation "com.exactpro.th2:th2-sailfish-utils"
+    implementation "com.exactpro.th2:th2-store-common"
+    implementation "com.exactpro.cradle:cradle-cassandra"
+    implementation "com.exactpro.cradle:cradle-core"
+    implementation "com.exactpro.th2:th2-grpc-event-store"
 
-    compile "com.rabbitmq:amqp-client:5.8.0"
-    compile "com.datastax.cassandra:cassandra-driver-core:${cassandra_version}"//FIXME: Migrate to another library for UUID
-    compile "com.exactpro.cradle:cradle-core:${cradleVersion}" // Required to get max size of batch
+    implementation "org.slf4j:slf4j-log4j12"
+    implementation "org.slf4j:slf4j-api"
 
-    compile "com.exactpro.th2:th2-grpc-event-store:${th2CommonVersion}"
+    implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
 
-    compile "com.exactpro.th2:th2-common:${th2CommonVersion}"
-    compile "com.exactpro.sf:sailfish-core:${sailfishVersion}"
+    implementation "com.rabbitmq:amqp-client:5.8.0"
 
-    compile "org.slf4j:slf4j-log4j12:${slf4jVersion}"
-    compile "org.slf4j:slf4j-api:${slf4jVersion}"
+    implementation "com.exactpro.sf:sailfish-core:${sailfishVersion}"
 
     testImplementation 'junit:junit:4.12'
 }
+
+artifactoryPublish.skip = true
 
 application {
     mainClassName 'com.exactpro.th2.connectivity.MicroserviceMain'
 }
 
-applicationName = archivesBaseName
+applicationName = 'service'
 
 distTar {
-    archiveName "${archivesBaseName}.tar"
+    archiveName "${applicationName}.tar"
 }
 
 dockerPrepare {
@@ -134,8 +174,5 @@ dockerPrepare {
 }
 
 docker {
-    name "${target_docker_repository}/${docke_image_name}:${connectivityDockerImageVersion}"
-    tag 'local-version', "${docke_image_name}:${connectivityDockerImageVersion}"
-
-    copySpec.from(tarTree("$buildDir/distributions/${archivesBaseName}.tar"))
+    copySpec.from(tarTree("$buildDir/distributions/${applicationName}.tar"))
 }

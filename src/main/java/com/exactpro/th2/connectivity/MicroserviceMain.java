@@ -1,9 +1,12 @@
 /*
  * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -181,12 +184,12 @@ public class MicroserviceMain {
     }
 
     private static void subscribeToSendMessage(EventStoreServiceService eventStoreConnector, @Nullable Direction direction, Flowable<ConnectivityMessage> messageConnectable) {
-        messageConnectable.filter(message -> contains(message.getiMessage().getMetaData(), PARENT_EVENT_ID))
+        messageConnectable.filter(message -> contains(message.getSailfishMessage().getMetaData(), PARENT_EVENT_ID))
                 .subscribe(message -> {
                     storeEvent(eventStoreConnector, Event.start().endTimestamp()
-                            .name("Send '" + message.getiMessage().getName() + "' message")
+                            .name("Send '" + message.getSailfishMessage().getName() + "' message")
                             .type("Send message")
-                            .messageID(message.getMessageID()), getParentEventID(message.getiMessage().getMetaData()).getId());
+                            .messageID(message.getMessageID()), getParentEventID(message.getSailfishMessage().getMetaData()).getId());
                 });
     }
 
