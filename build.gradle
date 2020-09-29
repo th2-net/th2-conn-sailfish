@@ -119,6 +119,7 @@ dependencies {
     implementation "com.exactpro.th2:th2-common"
     implementation "com.exactpro.th2:th2-sailfish-utils"
     implementation "com.exactpro.th2:th2-store-common"
+    implementation "com.exactpro.th2:th2-grpc-event-store"
     implementation "com.exactpro.cradle:cradle-cassandra"
     implementation "com.exactpro.cradle:cradle-core"
 
