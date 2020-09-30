@@ -1,5 +1,4 @@
 apply plugin: 'java'
-apply plugin: 'maven-publish'
 apply plugin: 'com.google.protobuf'
 apply plugin: 'com.jfrog.artifactory'
 
@@ -14,11 +13,12 @@ sourceCompatibility = 1.11
 targetCompatibility = 1.11
 
 dependencies {
-    compile "io.grpc:grpc-protobuf:${grpcVersion}"
-    compile "io.grpc:grpc-stub:${grpcVersion}"
-    compile "io.grpc:grpc-core:${grpcVersion}"
+    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "io.grpc:grpc-core:${grpcVersion}"
 
-    compile "com.exactpro.th2:th2-grpc-infra:${th2CommonVersion}"
+    implementation "com.exactpro.th2:th2-grpc-event-store"
+    implementation "com.exactpro.th2:th2-grpc-infra"
 }
 
 sourceSets {
@@ -59,17 +59,7 @@ task zipProtobuf (type: Zip) {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId = 'th2-grpc-connectivity'
-
-            from components.java
             artifact source: zipProtobuf, extension: 'zip'
-        }
-    }
-
-    repositories {
-        maven {
-            name = 'localRepo'
-            url = sharedDir
         }
     }
 }
