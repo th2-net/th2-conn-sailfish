@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 @file:JvmName("SailfishMetadataExtensions")
-package com.exactpro.th2.connectivity.utility
+package com.exactpro.th2.conn.utility
 
 import com.exactpro.sf.common.messages.IMetadata
 import com.exactpro.th2.common.event.Event
-import com.exactpro.th2.connectivity.utility.MetadataProperty.PARENT_EVENT_ID
+import com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub
 import com.exactpro.th2.eventstore.grpc.StoreEventRequest
 import com.exactpro.th2.infra.grpc.EventID

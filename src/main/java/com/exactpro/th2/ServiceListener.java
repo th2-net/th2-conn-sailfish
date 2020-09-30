@@ -25,7 +25,7 @@ import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
 import com.exactpro.th2.common.event.EventUtils;
-import com.exactpro.th2.connectivity.utility.EventStoreExtensions;
+import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
 import com.exactpro.th2.infra.grpc.Direction;
 import com.exactpro.th2.infra.grpc.EventID;

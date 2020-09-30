@@ -42,7 +42,7 @@ allprojects {
     }
 
     dependencies {
-        api platform('com.exactpro.th2:th2-bom:1.0.7')
+        api platform('com.exactpro.th2:bom:2.0.+')
     }
 
 
@@ -114,12 +114,12 @@ compileKotlin {
 }
 
 dependencies {
-    implementation(project(':th2-grpc-connectivity'))
+    implementation(project(':grpc-conn'))
 
-    implementation "com.exactpro.th2:th2-common"
-    implementation "com.exactpro.th2:th2-sailfish-utils"
-    implementation "com.exactpro.th2:th2-store-common"
-    implementation "com.exactpro.th2:th2-grpc-event-store"
+    implementation "com.exactpro.th2:common"
+    implementation "com.exactpro.th2:sailfish-utils"
+    implementation "com.exactpro.th2:store-common"
+    implementation "com.exactpro.th2:grpc-estore"
     implementation "com.exactpro.cradle:cradle-cassandra"
     implementation "com.exactpro.cradle:cradle-core"
 

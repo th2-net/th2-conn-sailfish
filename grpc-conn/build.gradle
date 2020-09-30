@@ -17,8 +17,8 @@ dependencies {
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     implementation "io.grpc:grpc-core:${grpcVersion}"
 
-    implementation "com.exactpro.th2:th2-grpc-event-store"
-    implementation "com.exactpro.th2:th2-grpc-infra"
+    implementation "com.exactpro.th2:grpc-estore"
+    implementation "com.exactpro.th2:grpc-common"
 }
 
 sourceSets {

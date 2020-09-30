@@ -17,8 +17,7 @@ package com.exactpro.th2;
 
 import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.externalapi.IServiceProxy;
-import com.exactpro.th2.connectivity.configuration.Configuration;
-import com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions;
+import com.exactpro.th2.conn.configuration.Configuration;
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
 import com.exactpro.th2.infra.grpc.Message;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -30,7 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
-import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.setParentEventID;
+import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.setParentEventID;
 import static java.util.Objects.requireNonNull;
 
 public class MessageSender {

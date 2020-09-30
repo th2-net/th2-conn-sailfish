@@ -1,4 +1,4 @@
-rootProject.name = 'th2-connectivity'
+rootProject.name = 'conn'
 
-include "grpc-connectivity"
-project(':grpc-connectivity').name = 'th2-grpc-connectivity'
+include "grpc-conn"
+project(':grpc-conn').name = 'grpc-conn'

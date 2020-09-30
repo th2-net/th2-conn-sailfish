@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 @file:JvmName("EventStoreExtensions")
-package com.exactpro.th2.connectivity.utility
+package com.exactpro.th2.conn.utility
 
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub

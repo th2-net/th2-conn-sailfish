@@ -15,7 +15,7 @@
  ******************************************************************************/
 package com.exactpro.th2;
 
-import com.exactpro.th2.connectivity.configuration.Configuration;
+import com.exactpro.th2.conn.configuration.Configuration;
 import com.exactpro.th2.connectivity.grpc.ConnectivityGrpc;
 import com.exactpro.th2.connectivity.grpc.QueueInfo;
 import com.exactpro.th2.connectivity.grpc.QueueRequest;
