@@ -114,8 +114,6 @@ compileKotlin {
 }
 
 dependencies {
-    implementation(project(':grpc-conn'))
-
     implementation "com.exactpro.th2:common"
     implementation "com.exactpro.th2:sailfish-utils"
     implementation "com.exactpro.th2:store-common"

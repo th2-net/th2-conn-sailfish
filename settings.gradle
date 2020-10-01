@@ -1,4 +1,1 @@
 rootProject.name = 'conn'
-
-include "grpc-conn"
-project(':grpc-conn').name = 'grpc-conn'
