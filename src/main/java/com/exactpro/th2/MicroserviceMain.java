@@ -226,7 +226,7 @@ public class MicroserviceMain {
                 .map(group -> {
                     @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
                     Flowable<ConnectivityMessage> messageConnectable = group
-                            .doOnTerminate(terminateFlowable)
+                            .doOnCancel(terminateFlowable) // This call is requried for terminate the publisher and prevent creation another group
                             .publish()
                             .refCount(direction == Direction.SECOND ? 2 : 1);
 
