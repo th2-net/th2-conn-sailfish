@@ -61,6 +61,7 @@ import com.exactpro.sf.common.messages.structures.IDictionaryStructure;
 import com.exactpro.sf.configuration.suri.SailfishURI;
 import com.exactpro.sf.configuration.suri.SailfishURIException;
 import com.exactpro.sf.configuration.workspace.WorkspaceSecurityException;
+import com.exactpro.sf.externalapi.DictionaryType;
 import com.exactpro.sf.externalapi.IMessageFactoryProxy;
 import com.exactpro.sf.externalapi.IServiceFactory;
 import com.exactpro.sf.externalapi.IServiceListener;
@@ -88,7 +89,7 @@ import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.exceptions.Exceptions;
-import io.reactivex.rxjava3.flowables.ConnectableFlowable;
+import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
 import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
@@ -173,7 +174,7 @@ public class MicroserviceMain {
             });
             printServiceSetting(serviceProxy);
             IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());
-            SailfishURI dictionaryURI = serviceProxy.getSettings().getDictionary();
+            SailfishURI dictionaryURI = serviceProxy.getSettings().getDictionary(DictionaryType.MAIN);
             IDictionaryStructure dictionary = serviceFactory.getDictionary(dictionaryURI);
 
             MessageSender messageSender = new MessageSender(serviceProxy, configuration, eventStoreConnector,
@@ -189,7 +190,7 @@ public class MicroserviceMain {
                 server.stop();
             });
 
-            createPipeline(configuration, processor, eventStoreConnector)
+            createPipeline(configuration, processor, processor::onComplete, eventStoreConnector)
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, server, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
@@ -215,23 +216,24 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<ConnectableFlowable<ConnectivityMessage>> createPipeline(Configuration configuration,
-            Flowable<ConnectivityMessage> processor, EventStoreServiceBlockingStub eventStoreConnector) {
+    private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(Configuration configuration,
+            Flowable<ConnectivityMessage> flowable, Action terminateFlowable, EventStoreServiceBlockingStub eventStoreConnector) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-        return processor.observeOn(PIPELINE_SCHEDULER)
+        return flowable.observeOn(PIPELINE_SCHEDULER)
                 .doOnNext(msg -> LOGGER.debug("Start handling message with sequence {}", msg.getSequence()))
                 .groupBy(ConnectivityMessage::getDirection)
                 .map(group -> {
                     @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
-                    ConnectableFlowable<ConnectivityMessage> messageConnectable = group.publish();
+                    Flowable<ConnectivityMessage> messageConnectable = group
+                            .doOnCancel(terminateFlowable) // This call is requried for terminate the publisher and prevent creation another group
+                            .publish()
+                            .refCount(direction == Direction.SECOND ? 2 : 1);
 
                     if (direction == Direction.SECOND) {
                         subscribeToSendMessage(eventStoreConnector, messageConnectable);
                     }
                     createPackAndPublishPipeline(configuration, direction, messageConnectable);
-
-                    messageConnectable.connect();
 
                     return messageConnectable;
                 });
@@ -261,7 +263,7 @@ public class MicroserviceMain {
         String exchangeName = configuration.getExchangeName();
 
         LOGGER.info("Map group {}", direction);
-        ConnectableFlowable<ConnectivityBatch> batchConnectable = messageConnectable
+        Flowable<ConnectivityBatch> batchConnectable = messageConnectable
                 .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, MAX_MESSAGES_COUNT)
                 .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
@@ -273,7 +275,8 @@ public class MicroserviceMain {
                                 .collect(Collectors.toList()));
                     }
                 })
-                .publish();
+                .publish()
+                .refCount(2);
 
         subscribeToPackAndPublish(routingKeyMap, batchConnectable.map(ConnectivityBatch::convertToProtoRawBatch), mqFactory,
                 direction, exchangeName, ContentType.RAW,
@@ -287,7 +290,6 @@ public class MicroserviceMain {
                 MessageBatch::getMessagesCount);
         LOGGER.info("Subscribed to transfer parsed batch group {}", direction);
 
-        batchConnectable.connect();
         LOGGER.info("Connected to publish batches group {}", direction);
     }
 
