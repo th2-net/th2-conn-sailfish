@@ -23,6 +23,7 @@ Also, this component is responsible for maintaining connections and sessions in 
 - RABBITMQ_VHOST=someVhost
 - RABBITMQ_USER=some_user
 - GRPC_PORT=7878
+- DISABLE_GRPC=false
 - SESSION_ALIAS=fix_client
 - TH2_EVENT_STORAGE_GRPC_HOST=some-host-name-or-ip
 - TH2_EVENT_STORAGE_GRPC_PORT=some-port

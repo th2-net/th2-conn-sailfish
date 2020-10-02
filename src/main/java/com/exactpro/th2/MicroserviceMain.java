@@ -30,6 +30,7 @@ import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.c
 import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.getParentEventID;
 import static io.grpc.ManagedChannelBuilder.forAddress;
 import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
+import static java.lang.System.getenv;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
@@ -50,6 +51,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -184,7 +186,7 @@ public class MicroserviceMain {
                 messageSender.stop();
             });
             ConnectivityGrpsServer server = new ConnectivityGrpsServer(configuration,
-                    new ConnectivityHandler(configuration));
+                        new ConnectivityHandler(configuration));
             disposer.register(() -> {
                 LOGGER.info("Stop gRPC server");
                 server.stop();
@@ -369,6 +371,12 @@ public class MicroserviceMain {
         return configuration;
     }
 
+    //FIXME: Remove this code after removing grpc from connectivity
+    public static final String ENV_DISABLE_GRPC = "DISABLE_GRPC";
+    public static boolean isEnabledGrpc() {
+        return !BooleanUtils.toBoolean(getenv(ENV_DISABLE_GRPC));
+    }
+
     private static IServiceProxy loadService(IServiceFactory serviceFactory, File servicePath, IServiceListener serviceListener) {
         try (InputStream serviceStream = new FileInputStream(servicePath)) {
             return serviceFactory.createService(serviceStream, serviceListener);
@@ -396,7 +404,12 @@ public class MicroserviceMain {
             try {
                 LOGGER.info("Subscribed to pipeline");
                 serviceProxy.start();
-                server.start();
+                if (isEnabledGrpc()) {
+                    LOGGER.info("Enabled gRPC");
+                    server.start();
+                } else {
+                    LOGGER.info("Disabled gRPC");
+                }
                 messageSender.start();
             } catch (IOException | TimeoutException e) {
                 LOGGER.error("Services starting failure", e);

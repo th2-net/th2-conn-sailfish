@@ -19,7 +19,8 @@ ENV RABBITMQ_HOST=rabbitmq \
     RABBITMQ_USER=guest \
     RABBITMQ_PASS=guest \
     RABBITMQ_VHOST=th2 \
-    GRPC_PORT=8080
+    GRPC_PORT=8080 \
+    DISABLE_GRPC=false
 WORKDIR /home
 COPY --from=build /home/gradle/build/docker .
 ENTRYPOINT ["/home/service/bin/service", "/home/sailfish/workspace", "service.xml"]
