@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
-import com.exactpro.th2.connectivity.configuration.Configuration;
+import com.exactpro.th2.conn.configuration.Configuration;
 
 public class ConnectivityGrpsServer {
     private final Logger LOGGER = LoggerFactory.getLogger(getClass().getName() + "@" + hashCode());

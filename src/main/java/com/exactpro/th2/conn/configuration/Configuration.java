@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-package com.exactpro.th2.connectivity.configuration;
+package com.exactpro.th2.conn.configuration;
 
 import static java.lang.System.getenv;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;

@@ -16,7 +16,7 @@
 package com.exactpro.th2;
 
 import com.exactpro.sf.common.messages.IMessage;
-import com.exactpro.th2.infra.grpc.Direction;
+import com.exactpro.th2.common.grpc.Direction;
 
 import java.io.Closeable;
 

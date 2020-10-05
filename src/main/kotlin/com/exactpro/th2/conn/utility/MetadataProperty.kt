@@ -13,26 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.exactpro.th2.conn.utility
 
-syntax = "proto3";
-package th2;
+import com.exactpro.th2.common.grpc.EventID
 
-option java_multiple_files = true;
-option java_package = "com.exactpro.th2.connectivity.grpc";
+enum class MetadataProperty(val propertyName: String, val propertyClass: Class<*>) {
+    PARENT_EVENT_ID("th2ParentEventID", EventID::class.java);
 
-service Connectivity {
-    rpc getQueueInfo (QueueRequest) returns (QueueInfo) {}
+    operator fun component1(): String = propertyName
+    operator fun component2(): Class<*> = propertyClass
+
+    companion object {
+        fun fromString(propertyName: String): MetadataProperty? = values().find { it.propertyName == propertyName }
+    }
 }
-
-message QueueRequest {}
-
-message QueueInfo {
-    string exchange_name = 1;
-    string in_msg_queue = 2;
-    string in_raw_msg_queue = 3;
-    string out_msg_queue = 4;
-    string out_raw_msg_queue = 5;
-    string send_msg_queue = 6;
-    string send_raw_msg_queue = 7;
-}
-

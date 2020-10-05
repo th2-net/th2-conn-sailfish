@@ -25,14 +25,15 @@ import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
 import com.exactpro.th2.common.event.EventUtils;
-import com.exactpro.th2.connectivity.utility.EventStoreExtensions;
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
-import com.exactpro.th2.infra.grpc.Direction;
-import com.exactpro.th2.infra.grpc.EventID;
+import com.exactpro.th2.conn.utility.EventStoreExtensions;
+import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
+import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.EventID;
+import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
-import static com.exactpro.th2.infra.grpc.Direction.FIRST;
-import static com.exactpro.th2.infra.grpc.Direction.SECOND;
+import static com.exactpro.th2.common.grpc.Direction.FIRST;
+import static com.exactpro.th2.common.grpc.Direction.SECOND;
 import static java.util.Objects.requireNonNull;
 
 import java.util.Map;

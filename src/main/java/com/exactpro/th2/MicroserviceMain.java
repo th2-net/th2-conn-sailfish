@@ -23,14 +23,13 @@ import static com.exactpro.th2.configuration.RabbitMQConfiguration.getEnvRabbitM
 import static com.exactpro.th2.configuration.RabbitMQConfiguration.getEnvRabbitMQUser;
 import static com.exactpro.th2.configuration.RabbitMQConfiguration.getEnvRabbitMQVhost;
 import static com.exactpro.th2.configuration.Th2Configuration.getEnvRabbitMQExchangeNameTH2Connectivity;
-import static com.exactpro.th2.connectivity.configuration.Configuration.getEnvSessionAlias;
-import static com.exactpro.th2.connectivity.utility.EventStoreExtensions.storeEvent;
-import static com.exactpro.th2.connectivity.utility.MetadataProperty.PARENT_EVENT_ID;
-import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.contains;
-import static com.exactpro.th2.connectivity.utility.SailfishMetadataExtensions.getParentEventID;
+import static com.exactpro.th2.conn.configuration.Configuration.getEnvSessionAlias;
+import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
+import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
+import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
+import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
 import static io.grpc.ManagedChannelBuilder.forAddress;
 import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
-import static java.lang.System.getenv;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
@@ -51,7 +50,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -72,18 +70,20 @@ import com.exactpro.sf.externalapi.ISettingsProxy;
 import com.exactpro.sf.externalapi.ServiceFactory;
 import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.MessageBatch;
+import com.exactpro.th2.common.grpc.MessageID;
+import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.configuration.RabbitMQConfiguration;
 import com.exactpro.th2.configuration.Th2Configuration;
-import com.exactpro.th2.connectivity.configuration.Configuration;
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc;
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
-import com.exactpro.th2.infra.grpc.Direction;
-import com.exactpro.th2.infra.grpc.MessageBatch;
-import com.exactpro.th2.infra.grpc.MessageID;
-import com.exactpro.th2.infra.grpc.RawMessageBatch;
+import com.exactpro.th2.conn.configuration.Configuration;
+import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc;
+import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
 import com.exactpro.th2.mq.ExchnageType;
 import com.exactpro.th2.mq.IMQFactory;
 import com.exactpro.th2.mq.rabbitmq.RabbitMQFactory;
+import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
+import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.MessageLite;
 
@@ -185,15 +185,9 @@ public class MicroserviceMain {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();
             });
-            ConnectivityGrpsServer server = new ConnectivityGrpsServer(configuration,
-                        new ConnectivityHandler(configuration));
-            disposer.register(() -> {
-                LOGGER.info("Stop gRPC server");
-                server.stop();
-            });
 
             createPipeline(configuration, processor, processor::onComplete, eventStoreConnector)
-                    .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, server, messageSender));
+                    .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
         } catch (IllegalArgumentException e) { LOGGER.error(e.getMessage(), e); exitCode = 4;
@@ -371,12 +365,6 @@ public class MicroserviceMain {
         return configuration;
     }
 
-    //FIXME: Remove this code after removing grpc from connectivity
-    public static final String ENV_DISABLE_GRPC = "DISABLE_GRPC";
-    public static boolean isEnabledGrpc() {
-        return !BooleanUtils.toBoolean(getenv(ENV_DISABLE_GRPC));
-    }
-
     private static IServiceProxy loadService(IServiceFactory serviceFactory, File servicePath, IServiceListener serviceListener) {
         try (InputStream serviceStream = new FileInputStream(servicePath)) {
             return serviceFactory.createService(serviceStream, serviceListener);
@@ -389,12 +377,10 @@ public class MicroserviceMain {
     private static class TermibnationSubscriber<T> extends DisposableSubscriber<T> {
 
         private final IServiceProxy serviceProxy;
-        private final ConnectivityGrpsServer server;
         private final MessageSender messageSender;
 
-        public TermibnationSubscriber(IServiceProxy serviceProxy, ConnectivityGrpsServer server, MessageSender messageSender) {
+        public TermibnationSubscriber(IServiceProxy serviceProxy, MessageSender messageSender) {
             this.serviceProxy = serviceProxy;
-            this.server = server;
             this.messageSender = messageSender;
         }
 
@@ -404,12 +390,6 @@ public class MicroserviceMain {
             try {
                 LOGGER.info("Subscribed to pipeline");
                 serviceProxy.start();
-                if (isEnabledGrpc()) {
-                    LOGGER.info("Enabled gRPC");
-                    server.start();
-                } else {
-                    LOGGER.info("Disabled gRPC");
-                }
                 messageSender.start();
             } catch (IOException | TimeoutException e) {
                 LOGGER.error("Services starting failure", e);
