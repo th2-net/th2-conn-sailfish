@@ -23,9 +23,9 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.exactpro.th2.infra.grpc.Direction;
-import com.exactpro.th2.infra.grpc.MessageBatch;
-import com.exactpro.th2.infra.grpc.RawMessageBatch;
+import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.MessageBatch;
+import com.exactpro.th2.common.grpc.RawMessageBatch;
 
 public class ConnectivityBatch {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityBatch.class);

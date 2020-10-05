@@ -72,15 +72,17 @@ import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.configuration.RabbitMQConfiguration;
 import com.exactpro.th2.configuration.Th2Configuration;
 import com.exactpro.th2.conn.configuration.Configuration;
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc;
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
-import com.exactpro.th2.infra.grpc.Direction;
-import com.exactpro.th2.infra.grpc.MessageBatch;
-import com.exactpro.th2.infra.grpc.MessageID;
-import com.exactpro.th2.infra.grpc.RawMessageBatch;
+import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc;
+import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
+import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.MessageBatch;
+import com.exactpro.th2.common.grpc.MessageID;
+import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.mq.ExchnageType;
 import com.exactpro.th2.mq.IMQFactory;
 import com.exactpro.th2.mq.rabbitmq.RabbitMQFactory;
+import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
+import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.MessageLite;
 
@@ -182,15 +184,9 @@ public class MicroserviceMain {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();
             });
-            ConnectivityGrpsServer server = new ConnectivityGrpsServer(configuration,
-                    new ConnectivityHandler(configuration));
-            disposer.register(() -> {
-                LOGGER.info("Stop gRPC server");
-                server.stop();
-            });
 
             createPipeline(configuration, processor, eventStoreConnector)
-                    .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, server, messageSender));
+                    .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
         } catch (IllegalArgumentException e) { LOGGER.error(e.getMessage(), e); exitCode = 4;
@@ -379,12 +375,10 @@ public class MicroserviceMain {
     private static class TermibnationSubscriber<T> extends DisposableSubscriber<T> {
 
         private final IServiceProxy serviceProxy;
-        private final ConnectivityGrpsServer server;
         private final MessageSender messageSender;
 
-        public TermibnationSubscriber(IServiceProxy serviceProxy, ConnectivityGrpsServer server, MessageSender messageSender) {
+        public TermibnationSubscriber(IServiceProxy serviceProxy, MessageSender messageSender) {
             this.serviceProxy = serviceProxy;
-            this.server = server;
             this.messageSender = messageSender;
         }
 
@@ -394,7 +388,6 @@ public class MicroserviceMain {
             try {
                 LOGGER.info("Subscribed to pipeline");
                 serviceProxy.start();
-                server.start();
                 messageSender.start();
             } catch (IOException | TimeoutException e) {
                 LOGGER.error("Services starting failure", e);

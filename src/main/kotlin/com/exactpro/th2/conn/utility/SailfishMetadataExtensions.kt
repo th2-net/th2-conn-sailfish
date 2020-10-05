@@ -19,9 +19,9 @@ package com.exactpro.th2.conn.utility
 import com.exactpro.sf.common.messages.IMetadata
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub
-import com.exactpro.th2.eventstore.grpc.StoreEventRequest
-import com.exactpro.th2.infra.grpc.EventID
+import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub
+import com.exactpro.th2.estore.grpc.StoreEventRequest
+import com.exactpro.th2.common.grpc.EventID
 import com.fasterxml.jackson.core.JsonProcessingException
 import org.slf4j.LoggerFactory
 

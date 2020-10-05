@@ -17,8 +17,8 @@
 package com.exactpro.th2.conn.utility
 
 import com.exactpro.th2.common.event.Event
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub
-import com.exactpro.th2.eventstore.grpc.StoreEventRequest
+import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub
+import com.exactpro.th2.estore.grpc.StoreEventRequest
 import com.fasterxml.jackson.core.JsonProcessingException
 import org.slf4j.LoggerFactory
 

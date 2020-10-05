@@ -15,7 +15,7 @@
  */
 package com.exactpro.th2.conn.utility
 
-import com.exactpro.th2.infra.grpc.EventID
+import com.exactpro.th2.common.grpc.EventID
 
 enum class MetadataProperty(val propertyName: String, val propertyClass: Class<*>) {
     PARENT_EVENT_ID("th2ParentEventID", EventID::class.java);
