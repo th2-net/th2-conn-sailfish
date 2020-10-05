@@ -143,7 +143,7 @@ dependencies {
     implementation "com.exactpro.th2:th2-store-common"
     implementation "com.exactpro.cradle:cradle-cassandra"
     implementation "com.exactpro.cradle:cradle-core"
-    implementation "com.exactpro.th2:th2-grpc-event-store"
+    implementation "com.exactpro.th2:th2-grpc-event-store:1.5.0-schema.+"
 
     implementation "org.slf4j:slf4j-log4j12"
     implementation "org.slf4j:slf4j-api"

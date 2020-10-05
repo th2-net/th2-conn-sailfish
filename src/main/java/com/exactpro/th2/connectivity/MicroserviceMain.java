@@ -204,10 +204,10 @@ public class MicroserviceMain {
                 .map(ConnectivityBatch::new)
                 .publish();
 
-        batchConnectable.map(ConnectivityBatch::convertToProtoRawBatch).subscribe(it -> rawMessageRouter.send(it, direction == Direction.FIRST ? "in" : "out", "raw"));
+        batchConnectable.map(ConnectivityBatch::convertToProtoRawBatch).subscribe(it -> rawMessageRouter.send(it, direction == Direction.FIRST ? "first" : "second", "publish", "raw"));
         LOGGER.info("Subscribed to transfer raw batch group {}", direction);
 
-        batchConnectable.map(ConnectivityBatch::convertToProtoParsedBatch).subscribe(it -> parsedMessageRouter.send(it, direction == Direction.FIRST ? "in" : "out", "parsed"));
+        batchConnectable.map(ConnectivityBatch::convertToProtoParsedBatch).subscribe(it -> parsedMessageRouter.send(it, direction == Direction.FIRST ? "first" : "second", "publish", "parsed"));
         LOGGER.info("Subscribed to transfer parsed batch group {}", direction);
 
         batchConnectable.connect();
