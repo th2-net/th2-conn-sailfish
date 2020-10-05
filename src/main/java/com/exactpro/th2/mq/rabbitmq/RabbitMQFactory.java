@@ -19,9 +19,9 @@ import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +40,11 @@ public class RabbitMQFactory implements IMQFactory {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMQFactory.class);
 
+    //FIXME: Move to schema API
+    private static final int COUNT_TRY_TO_CONNECT = 5;
+    private static final int SHUTDOWN_TIMEOUT = 60_000;
+
+    private final AtomicInteger count = new AtomicInteger(0);
     private final Connection connection;
 
     public RabbitMQFactory(String host, int port, String virtualHost, String username, String password) throws IOException, TimeoutException {
@@ -49,6 +54,20 @@ public class RabbitMQFactory implements IMQFactory {
                 requireNonNull(virtualHost, "VirtualHost can't be null"),
                 requireNonNull(username, "Username can't be null"),
                 requireNonNull(password, "Password can't be null"));
+
+        //FIXME: Move to schema API
+        factory.setAutomaticRecoveryEnabled(true);
+        factory.setShutdownTimeout(SHUTDOWN_TIMEOUT);
+        factory.setConnectionRecoveryTriggeringCondition(s -> {
+            if (count.incrementAndGet() < COUNT_TRY_TO_CONNECT) {
+                return true;
+            }
+            LOGGER.error("Can't connect to RabbitMQ. Count tries = {}", count.get());
+            // TODO: we should stop the execution of the application. Don't use System.exit!!!
+            return false;
+        });
+
+
         connection = factory.newConnection();
     }
 
@@ -115,7 +134,7 @@ public class RabbitMQFactory implements IMQFactory {
                 LOGGER.debug("Data size '{}' is published to queue '{}:{}'", bytes.length, exchangeName, routingKey);
             } catch (IOException e) {
                 LOGGER.error("Publication to RabbitMQ failure '{}'", this, e);
-                Exceptions.propagate(e);
+                close();
             }
         }
 
@@ -145,7 +164,8 @@ public class RabbitMQFactory implements IMQFactory {
                 channel.close();
             } catch (IOException | TimeoutException e) {
                 LOGGER.error("RabbitMQ channel closing failure", e);
-                Exceptions.propagate(e);
+            } finally {
+                cancel();
             }
         }
     }
