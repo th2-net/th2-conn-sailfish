@@ -64,13 +64,12 @@ import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.configuration.RabbitMQConfiguration;
 import com.exactpro.th2.configuration.Th2Configuration;
 import com.exactpro.th2.connectivity.configuration.ConnectivityConfiguration;
-import com.exactpro.th2.eventstore.grpc.EventStoreServiceService;
 import com.exactpro.th2.infra.grpc.Direction;
+import com.exactpro.th2.infra.grpc.EventBatch;
 import com.exactpro.th2.infra.grpc.MessageBatch;
 import com.exactpro.th2.infra.grpc.RawMessageBatch;
 import com.exactpro.th2.schema.dictionary.DictionaryType;
 import com.exactpro.th2.schema.factory.CommonFactory;
-import com.exactpro.th2.schema.grpc.router.GrpcRouter;
 import com.exactpro.th2.schema.message.MessageRouter;
 
 import io.reactivex.rxjava3.annotations.NonNull;
@@ -115,20 +114,19 @@ public class MicroserviceMain {
         Map<Direction, AtomicLong> directionToSequence = getActualSequences();
 
         try {
-            GrpcRouter grpcRouter = factory.getGrpcRouter();
             MessageRouter<MessageBatch> parsedMessageBatch = (MessageRouter<MessageBatch>) factory.getMessageRouterParsedBatch();
 
             IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
 
             FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
 
-            EventStoreServiceService eventStore = grpcRouter.getService(EventStoreServiceService.class);
+            MessageRouter<EventBatch> eventBatchRouter = factory.getEventBatchRouter();
 
-            String rootEventID = storeEvent(eventStore, Event.start().endTimestamp()
+            String rootEventID = storeEvent(eventBatchRouter, Event.start().endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
                     .type("Microservice")).getId();
 
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStore, rootEventID);
+            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventBatchRouter, rootEventID);
             IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             printServiceSetting(serviceProxy);
             IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());
@@ -140,7 +138,7 @@ public class MicroserviceMain {
 
             configureShutdownHook(processor, serviceProxy, messageSender, serviceFactory);
 
-            createPipeline(configuration, processor, eventStore, parsedMessageBatch, (MessageRouter<RawMessageBatch>) factory.getMessageRouterRawBatch())
+            createPipeline(configuration, processor, eventBatchRouter, parsedMessageBatch, (MessageRouter<RawMessageBatch>) factory.getMessageRouterRawBatch())
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (Exception e) {
             LOGGER.error(e.getMessage(), e);
@@ -163,7 +161,7 @@ public class MicroserviceMain {
     }
 
     private static @NonNull Flowable<ConnectableFlowable<ConnectivityMessage>> createPipeline(ConnectivityConfiguration configuration,
-            Flowable<ConnectivityMessage> processor, EventStoreServiceService eventStoreConnector,
+            Flowable<ConnectivityMessage> processor, MessageRouter<EventBatch> eventBatchRouter,
             MessageRouter<MessageBatch> parsedMessageRouter, MessageRouter<RawMessageBatch> rawMessageRouter) throws IOException, TimeoutException {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
@@ -173,7 +171,7 @@ public class MicroserviceMain {
                     ConnectableFlowable<ConnectivityMessage> messageConnectable = group.publish();
 
                     if (direction == Direction.SECOND) {
-                        subscribeToSendMessage(eventStoreConnector, direction, messageConnectable);
+                        subscribeToSendMessage(eventBatchRouter, direction, messageConnectable);
                     }
                     createPackAndPublishPipeline(direction, messageConnectable, parsedMessageRouter, rawMessageRouter);
 
@@ -183,10 +181,10 @@ public class MicroserviceMain {
                 });
     }
 
-    private static void subscribeToSendMessage(EventStoreServiceService eventStoreConnector, @Nullable Direction direction, Flowable<ConnectivityMessage> messageConnectable) {
+    private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, @Nullable Direction direction, Flowable<ConnectivityMessage> messageConnectable) {
         messageConnectable.filter(message -> contains(message.getSailfishMessage().getMetaData(), PARENT_EVENT_ID))
                 .subscribe(message -> {
-                    storeEvent(eventStoreConnector, Event.start().endTimestamp()
+                    storeEvent(eventBatchRouter, Event.start().endTimestamp()
                             .name("Send '" + message.getSailfishMessage().getName() + "' message")
                             .type("Send message")
                             .messageID(message.getMessageID()), getParentEventID(message.getSailfishMessage().getMetaData()).getId());
