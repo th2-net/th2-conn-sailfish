@@ -42,7 +42,7 @@ allprojects {
     }
 
     dependencies {
-        api platform('com.exactpro.th2:th2-bom:1.0.7')
+        api platform('com.exactpro.th2:th2-bom:1.2.0')
     }
 
 

@@ -15,12 +15,19 @@
  */
 package com.exactpro.th2;
 
+import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
 import static com.google.protobuf.TextFormat.shortDebugString;
 import static java.util.Objects.requireNonNull;
+import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
+import java.util.Collections;
+
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 
 import com.exactpro.sf.common.messages.IMessage;
+import com.exactpro.sf.common.messages.IMetadata;
+import com.exactpro.sf.common.messages.MetadataExtensions;
 import com.exactpro.th2.infra.grpc.ConnectionID;
 import com.exactpro.th2.infra.grpc.Direction;
 import com.exactpro.th2.infra.grpc.Message;
@@ -40,7 +47,7 @@ public class ConnectivityMessage {
 
     private final IMessageToProtoConverter converter;
 
-    // This variables can be calcilated in methods
+    // This variables can be calculated in methods
     private final MessageID messageID;
     private final Timestamp timestamp;
 
@@ -58,14 +65,14 @@ public class ConnectivityMessage {
 
     public RawMessage convertToProtoRawMessage() {
         return RawMessage.newBuilder()
-                        .setMetadata(createRawMessageMetadata(messageID, timestamp))
+                        .setMetadata(createRawMessageMetadata(messageID, timestamp, sailfishMessage.getMetaData()))
                         .setBody(ByteString.copyFrom(sailfishMessage.getMetaData().getRawMessage()))
                         .build();
     }
 
     public Message convertToProtoParsedMessage() {
         return converter.toProtoMessage(sailfishMessage)
-                        .setMetadata(createMessageMetadata(messageID, sailfishMessage.getName(), timestamp))
+                        .setMetadata(createMessageMetadata(messageID, sailfishMessage.getName(), timestamp, sailfishMessage.getMetaData()))
                         .build();
     }
 
@@ -107,18 +114,20 @@ public class ConnectivityMessage {
                 .build();
     }
 
-    private static MessageMetadata createMessageMetadata(MessageID messageID, String messageName, Timestamp timestamp) {
+    private static MessageMetadata createMessageMetadata(MessageID messageID, String messageName, Timestamp timestamp, IMetadata metadata) {
         return MessageMetadata.newBuilder()
                 .setId(messageID)
                 .setTimestamp(timestamp)
                 .setMessageType(messageName)
+                .putAllProperties(defaultIfNull(getMessageProperties(metadata), Collections.emptyMap()))
                 .build();
     }
 
-    private static RawMessageMetadata createRawMessageMetadata(MessageID messageID, Timestamp timestamp) {
+    private static RawMessageMetadata createRawMessageMetadata(MessageID messageID, Timestamp timestamp, IMetadata metadata) {
         return RawMessageMetadata.newBuilder()
                 .setId(messageID)
                 .setTimestamp(timestamp)
+                .putAllProperties(defaultIfNull(getMessageProperties(metadata), Collections.emptyMap()))
                 .build();
     }
 
