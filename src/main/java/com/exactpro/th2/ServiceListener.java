@@ -106,6 +106,7 @@ public class ServiceListener implements IServiceListener {
 
     @Override
     public void onMessage(IServiceProxy service, IMessage message, boolean rejected, ServiceHandlerRoute route) {
+        LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
         AtomicLong directionSeq = directionToSequence.get(direction);
         RelatedMessagesBatch relatedMessagesBatch;
