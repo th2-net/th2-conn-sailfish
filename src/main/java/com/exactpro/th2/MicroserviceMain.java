@@ -145,7 +145,7 @@ public class MicroserviceMain {
             });
 
             Configuration configuration = getConfiguration();
-            FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
+            FlowableProcessor<RelatedMessagesBatch> processor = UnicastProcessor.create();
             disposer.register(() -> {
                 LOGGER.info("Complite pipeline publisher");
                 processor.onComplete();
@@ -218,17 +218,17 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(Configuration configuration,
-            Flowable<ConnectivityMessage> flowable, Action terminateFlowable, EventStoreServiceBlockingStub eventStoreConnector) {
+    private static @NonNull Flowable<Flowable<RelatedMessagesBatch>> createPipeline(Configuration configuration,
+            Flowable<RelatedMessagesBatch> flowable, Action terminateFlowable, EventStoreServiceBlockingStub eventStoreConnector) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
         return flowable.observeOn(PIPELINE_SCHEDULER)
-                .doOnNext(msg -> LOGGER.debug("Start handling message with sequence {}", msg.getSequence()))
-                .groupBy(ConnectivityMessage::getDirection)
+                .doOnNext(relatedMessages -> LOGGER.debug("Start handling message batch with messages {}", relatedMessages.getMessages()))
+                .groupBy(RelatedMessagesBatch::getDirection)
                 .map(group -> {
                     @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
-                    Flowable<ConnectivityMessage> messageConnectable = group
-                            .doOnCancel(terminateFlowable) // This call is requried for terminate the publisher and prevent creation another group
+                    Flowable<RelatedMessagesBatch> messageConnectable = group
+                            .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
                             .publish()
                             .refCount(direction == Direction.SECOND ? 2 : 1);
 
@@ -241,20 +241,25 @@ public class MicroserviceMain {
                 });
     }
 
-    private static void subscribeToSendMessage(EventStoreServiceBlockingStub eventStoreConnector, Flowable<ConnectivityMessage> messageConnectable) {
+    private static void subscribeToSendMessage(EventStoreServiceBlockingStub eventStoreConnector, Flowable<RelatedMessagesBatch> messageConnectable) {
         //noinspection ResultOfMethodCallIgnored
-        messageConnectable.filter(message -> contains(message.getSailfishMessage().getMetaData(), PARENT_EVENT_ID))
-                .subscribe(message -> {
-                    Event event = Event.start().endTimestamp()
-                            .name("Send '" + message.getSailfishMessage().getName() + "' message")
-                            .type("Send message")
-                            .messageID(message.getMessageID());
-                    LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), message.getSequence());
-                    storeEvent(eventStoreConnector, event, getParentEventID(message.getSailfishMessage().getMetaData()).getId());
+        messageConnectable
+                .subscribe(relatedMessages -> {
+                    for (ConnectivityMessage message : relatedMessages.getMessages()) {
+                        if (!contains(message.getSailfishMessage().getMetaData(), PARENT_EVENT_ID)) {
+                            continue;
+                        }
+                        Event event = Event.start().endTimestamp()
+                                .name("Send '" + message.getSailfishMessage().getName() + "' message")
+                                .type("Send message")
+                                .messageID(message.getMessageID());
+                        LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), message.getSequence());
+                        storeEvent(eventStoreConnector, event, getParentEventID(message.getSailfishMessage().getMetaData()).getId());
+                    }
                 });
     }
 
-    private static void createPackAndPublishPipeline(Configuration configuration, @NotNull Direction direction, Flowable<ConnectivityMessage> messageConnectable) throws IOException, TimeoutException {
+    private static void createPackAndPublishPipeline(Configuration configuration, @NotNull Direction direction, Flowable<RelatedMessagesBatch> messageConnectable) throws IOException, TimeoutException {
         Map<ConnectionType, String> routingKeyMap = createRoutingKeyMap(configuration);
         IMQFactory mqFactory = new RabbitMQFactory(
                 configuration.getRabbitMQHost(),
@@ -267,7 +272,7 @@ public class MicroserviceMain {
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
                 .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, MAX_MESSAGES_COUNT)
-                .concatMapSingle(Flowable::toList)
+                .concatMapSingle(flowable -> flowable.flatMapIterable(RelatedMessagesBatch::getMessages).toList())
                 .filter(list -> !list.isEmpty())
                 .map(ConnectivityBatch::new)
                 .doOnNext(batch -> {
