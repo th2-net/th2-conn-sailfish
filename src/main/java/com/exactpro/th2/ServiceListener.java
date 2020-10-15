@@ -16,6 +16,7 @@
 package com.exactpro.th2;
 
 import com.exactpro.sf.common.messages.IMessage;
+import com.exactpro.sf.common.util.EvolutionBatch;
 import com.exactpro.sf.externalapi.IServiceListener;
 import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.sf.services.IdleStatus;
@@ -36,9 +37,13 @@ import static com.exactpro.th2.common.grpc.Direction.FIRST;
 import static com.exactpro.th2.common.grpc.Direction.SECOND;
 import static java.util.Objects.requireNonNull;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
+import org.jetbrains.annotations.NotNull;
 import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,11 +55,11 @@ public class ServiceListener implements IServiceListener {
     private final Map<Direction, AtomicLong> directionToSequence;
     private final IMessageToProtoConverter converter;
     private final String sessionAlias;
-    private final Subscriber<ConnectivityMessage> subscriber;
+    private final Subscriber<RelatedMessagesBatch> subscriber;
     private final EventStoreServiceBlockingStub eventStoreConnector;
     private final String rootEventID;
 
-    public ServiceListener(Map<Direction, AtomicLong> directionToSequence, IMessageToProtoConverter converter, String sessionAlias, Subscriber<ConnectivityMessage> subscriber,
+    public ServiceListener(Map<Direction, AtomicLong> directionToSequence, IMessageToProtoConverter converter, String sessionAlias, Subscriber<RelatedMessagesBatch> subscriber,
             EventStoreServiceBlockingStub eventStoreConnector, String rootEventID) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.converter = requireNonNull(converter, "Converter can't be null");
@@ -103,10 +108,25 @@ public class ServiceListener implements IServiceListener {
 
     @Override
     public void onMessage(IServiceProxy service, IMessage message, boolean rejected, ServiceHandlerRoute route) {
+        LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
-        long sequence = directionToSequence.get(direction).incrementAndGet();
-        LOGGER.debug("On message route '{}' sequence '{}' message '{}'", route, sequence, message);
-        subscriber.onNext(new ConnectivityMessage(converter, message, sessionAlias, direction, sequence));
+        AtomicLong directionSeq = directionToSequence.get(direction);
+        RelatedMessagesBatch relatedMessagesBatch;
+
+        if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
+            EvolutionBatch batch = new EvolutionBatch(message);
+            List<ConnectivityMessage> relatedMessages = new ArrayList<>();
+            for (IMessage msg : batch.getBatch()) {
+                ConnectivityMessage connectivityMessage = createConnectivityMessage(msg, direction, directionSeq);
+                relatedMessages.add(connectivityMessage);
+            }
+            relatedMessagesBatch = new RelatedMessagesBatch(direction, relatedMessages);
+        } else {
+            ConnectivityMessage connectivityMessage = createConnectivityMessage(message, direction, directionSeq);
+            relatedMessagesBatch = new RelatedMessagesBatch(direction, List.of(connectivityMessage));
+        }
+
+        subscriber.onNext(relatedMessagesBatch);
     }
 
     @Override
@@ -124,5 +144,12 @@ public class ServiceListener implements IServiceListener {
         } catch (RuntimeException | JsonProcessingException e) {
             LOGGER.error("Store event related to internal event failure", e);
         }
+    }
+
+    @NotNull
+    private ConnectivityMessage createConnectivityMessage(IMessage message, Direction direction, AtomicLong directionSeq) {
+        long sequence = directionSeq.incrementAndGet();
+        LOGGER.debug("On message: direction '{}'; sequence '{}'; message '{}'", direction, sequence, message);
+        return new ConnectivityMessage(converter, message, sessionAlias, direction, sequence);
     }
 }
