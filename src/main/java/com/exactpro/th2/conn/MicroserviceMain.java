@@ -102,10 +102,18 @@ public class MicroserviceMain {
         CommonFactory factory;
         try {
             factory = CommonFactory.createFromArguments(args);
-        } catch (ParseException e) {
+        } catch (RuntimeException e) {
             factory = new CommonFactory();
             LOGGER.warn("Can not create common factory from arguments");
         }
+
+        // just to use in lambda
+        CommonFactory finalFactory = factory;
+        disposer.register(() -> {
+            LOGGER.info("Closing factory");
+            finalFactory.close();
+        });
+
         ConnectivityConfiguration configuration = factory.getCustomConfiguration(ConnectivityConfiguration.class);
 
         File workspaceFolder = new File(configuration.getWorkspaceFolder());
