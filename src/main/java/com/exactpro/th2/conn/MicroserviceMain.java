@@ -16,32 +16,26 @@
 package com.exactpro.th2.conn;
 
 import static com.exactpro.cradle.messages.StoredMessageBatch.MAX_MESSAGES_COUNT;
-import static com.exactpro.th2.configuration.Configuration.getEnvGRPCPort;
-import static com.exactpro.th2.configuration.RabbitMQConfiguration.getEnvRabbitMQHost;
-import static com.exactpro.th2.configuration.RabbitMQConfiguration.getEnvRabbitMQPass;
-import static com.exactpro.th2.configuration.RabbitMQConfiguration.getEnvRabbitMQPort;
-import static com.exactpro.th2.configuration.RabbitMQConfiguration.getEnvRabbitMQUser;
-import static com.exactpro.th2.configuration.RabbitMQConfiguration.getEnvRabbitMQVhost;
-import static com.exactpro.th2.configuration.Th2Configuration.getEnvRabbitMQExchangeNameTH2Connectivity;
-import static com.exactpro.th2.conn.configuration.Configuration.getEnvSessionAlias;
+import static com.exactpro.sf.externalapi.DictionaryType.MAIN;
+import static com.exactpro.sf.externalapi.DictionaryType.OUTGOING;
 import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
 import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
-import static io.grpc.ManagedChannelBuilder.forAddress;
-import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
+import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
+import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -50,16 +44,17 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.commons.lang3.builder.EqualsBuilder;
-import org.apache.commons.lang3.builder.HashCodeBuilder;
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.jetbrains.annotations.NotNull;
+import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.exactpro.sf.common.messages.structures.IDictionaryStructure;
+import com.exactpro.sf.common.services.ServiceName;
+import com.exactpro.sf.comparison.conversion.ConversionException;
+import com.exactpro.sf.comparison.conversion.MultiConverter;
 import com.exactpro.sf.configuration.suri.SailfishURI;
 import com.exactpro.sf.configuration.suri.SailfishURIException;
+import com.exactpro.sf.configuration.suri.SailfishURIUtils;
 import com.exactpro.sf.configuration.workspace.WorkspaceSecurityException;
 import com.exactpro.sf.externalapi.DictionaryType;
 import com.exactpro.sf.externalapi.IMessageFactoryProxy;
@@ -71,21 +66,15 @@ import com.exactpro.sf.externalapi.ServiceFactory;
 import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.EventBatch;
 import com.exactpro.th2.common.grpc.MessageBatch;
-import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
-import com.exactpro.th2.configuration.RabbitMQConfiguration;
-import com.exactpro.th2.configuration.Th2Configuration;
-import com.exactpro.th2.conn.configuration.Configuration;
-import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc;
-import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
-import com.exactpro.th2.mq.ExchnageType;
-import com.exactpro.th2.mq.IMQFactory;
-import com.exactpro.th2.mq.rabbitmq.RabbitMQFactory;
+import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
+import com.exactpro.th2.common.schema.factory.CommonFactory;
+import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.protobuf.MessageLite;
 
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
@@ -107,86 +96,68 @@ public class MicroserviceMain {
     private static final Scheduler PIPELINE_SCHEDULER = createSingleScheduler(new ThreadFactoryBuilder()
             .setNameFormat("Pipeline-%d").build());
 
-    /**
-     * Configures External API Sailfish by passed service setting file
-     * Runs configured service and listen gRPC requests
-     * @param args:
-     *  0 - path to workspace with Sailfish plugin
-     *  1 - path to service settings file
-     * Environment variables:
-     *  {@link com.exactpro.th2.configuration.Configuration#ENV_GRPC_PORT}
-     *  {@link RabbitMQConfiguration#ENV_RABBITMQ_HOST}
-     *  {@link RabbitMQConfiguration#ENV_RABBITMQ_PORT}
-     *  {@link RabbitMQConfiguration#ENV_RABBITMQ_USER}
-     *  {@link RabbitMQConfiguration#ENV_RABBITMQ_PASS}
-     *  {@link RabbitMQConfiguration#ENV_RABBITMQ_VHOST}
-     *  {@link Th2Configuration#ENV_RABBITMQ_EXCHANGE_NAME_TH2_CONNECTIVITY}
-     */
     public static void main(String[] args) {
         Disposer disposer = new Disposer();
         Runtime.getRuntime().addShutdownHook(new Thread(disposer::dispose, "Shutdown hook"));
-        int exitCode = 0;
+        CommonFactory factory;
         try {
-            if (args.length < 2) {
-                LOGGER.error("Args is empty. Must have at least three parameters " +
-                        "with path to workspace folder, service configuration");
-                exitCode = 1;
-                return;
-            }
+            factory = CommonFactory.createFromArguments(args);
+        } catch (ParseException e) {
+            factory = new CommonFactory();
+            LOGGER.warn("Can not create common factory from arguments");
+        }
+        ConnectivityConfiguration configuration = factory.getCustomConfiguration(ConnectivityConfiguration.class);
 
-            File workspaceFolder = new File(args[0]);
-            File servicePath = new File(workspaceFolder, args[1]);
+        File workspaceFolder = new File(configuration.getWorkspaceFolder());
 
-            Map<Direction, AtomicLong> directionToSequence = getActualSequences();
+        Map<Direction, AtomicLong> directionToSequence = getActualSequences();
+        int exitCode = 0;
 
+        try {
             disposer.register(() -> {
                 LOGGER.info("Shutdown pipeline scheduler");
                 PIPELINE_SCHEDULER.shutdown();
             });
 
-            Configuration configuration = getConfiguration();
+            MessageRouter<MessageBatch> parsedMessageBatch = factory.getMessageRouterParsedBatch();
+
             FlowableProcessor<RelatedMessagesBatch> processor = UnicastProcessor.create();
             disposer.register(() -> {
                 LOGGER.info("Complite pipeline publisher");
                 processor.onComplete();
             });
 
-            Th2Configuration th2Configuration = configuration.getTh2Configuration();
-            EventStoreServiceBlockingStub eventStoreConnector = EventStoreServiceGrpc.newBlockingStub(forAddress(
-                    th2Configuration.getTh2EventStorageGRPCHost(), th2Configuration.getTh2EventStorageGRPCPort())
-                    .usePlaintext().build());
-
-            Event rootEvent = Event.start().endTimestamp()
-                    .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
-                    .type("Microservice");
-            String rootEventID = rootEvent.getId();
-
-            storeEvent(eventStoreConnector, rootEvent);
-
             IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
             disposer.register(() -> {
                 LOGGER.info("Close service factory");
                 serviceFactory.close();
             });
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventStoreConnector, rootEventID);
-            IServiceProxy serviceProxy = loadService(serviceFactory, servicePath, serviceListener);
+
+            MessageRouter<EventBatch> eventBatchRouter = factory.getEventBatchRouter();
+
+            String rootEventID = storeEvent(eventBatchRouter, Event.start().endTimestamp()
+                    .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
+                    .type("Microservice")).getId();
+
+            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventBatchRouter, rootEventID);
+            IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             disposer.register(() -> {
                 LOGGER.info("Stop service proxy");
                 serviceProxy.stop();
             });
             printServiceSetting(serviceProxy);
             IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());
-            SailfishURI dictionaryURI = serviceProxy.getSettings().getDictionary(DictionaryType.MAIN);
-            IDictionaryStructure dictionary = serviceFactory.getDictionary(dictionaryURI);
+            DictionaryType dictionaryType = serviceProxy.getSettings().getDictionaryTypes().contains(OUTGOING) ? OUTGOING : MAIN;
+            SailfishURI senderDictionaryURI = serviceProxy.getSettings().getDictionary(dictionaryType);
+            IDictionaryStructure dictionary = serviceFactory.getDictionary(senderDictionaryURI);
 
-            MessageSender messageSender = new MessageSender(serviceProxy, configuration, eventStoreConnector,
-                    new ProtoToIMessageConverter(messageFactory, dictionary, dictionaryURI));
+            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch);
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();
             });
 
-            createPipeline(configuration, processor, processor::onComplete, eventStoreConnector)
+            createPipeline(processor, processor::onComplete, eventBatchRouter, parsedMessageBatch, factory.getMessageRouterRawBatch())
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
@@ -212,8 +183,12 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<Flowable<RelatedMessagesBatch>> createPipeline(Configuration configuration,
-            Flowable<RelatedMessagesBatch> flowable, Action terminateFlowable, EventStoreServiceBlockingStub eventStoreConnector) {
+    private static @NonNull Flowable<Flowable<RelatedMessagesBatch>> createPipeline(
+            Flowable<RelatedMessagesBatch> flowable, Action terminateFlowable,
+            MessageRouter<EventBatch> eventBatchRouter,
+            MessageRouter<MessageBatch> parsedMessageRouter,
+            MessageRouter<RawMessageBatch> rawMessageRouter
+    ) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
         return flowable.observeOn(PIPELINE_SCHEDULER)
@@ -227,15 +202,15 @@ public class MicroserviceMain {
                             .refCount(direction == Direction.SECOND ? 2 : 1);
 
                     if (direction == Direction.SECOND) {
-                        subscribeToSendMessage(eventStoreConnector, messageConnectable);
+                        subscribeToSendMessage(eventBatchRouter, messageConnectable);
                     }
-                    createPackAndPublishPipeline(configuration, direction, messageConnectable);
+                    createPackAndPublishPipeline(direction, messageConnectable, parsedMessageRouter, rawMessageRouter);
 
                     return messageConnectable;
                 });
     }
 
-    private static void subscribeToSendMessage(EventStoreServiceBlockingStub eventStoreConnector, Flowable<RelatedMessagesBatch> messageConnectable) {
+    private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, Flowable<RelatedMessagesBatch> messageConnectable) {
         //noinspection ResultOfMethodCallIgnored
         messageConnectable
                 .subscribe(relatedMessages -> {
@@ -248,20 +223,13 @@ public class MicroserviceMain {
                                 .type("Send message")
                                 .messageID(message.getMessageID());
                         LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), message.getSequence());
-                        storeEvent(eventStoreConnector, event, getParentEventID(message.getSailfishMessage().getMetaData()).getId());
+                        storeEvent(eventBatchRouter, event, getParentEventID(message.getSailfishMessage().getMetaData()).getId());
                     }
                 });
     }
 
-    private static void createPackAndPublishPipeline(Configuration configuration, @NotNull Direction direction, Flowable<RelatedMessagesBatch> messageConnectable) throws IOException, TimeoutException {
-        Map<ConnectionType, String> routingKeyMap = createRoutingKeyMap(configuration);
-        IMQFactory mqFactory = new RabbitMQFactory(
-                configuration.getRabbitMQHost(),
-                configuration.getRabbitMQPort(),
-                configuration.getRabbitMQVirtualHost(),
-                configuration.getRabbitMQUserName(),
-                configuration.getRabbitMQPassword());
-        String exchangeName = configuration.getExchangeName();
+    private static void createPackAndPublishPipeline(Direction direction, Flowable<RelatedMessagesBatch> messageConnectable,
+                                                     MessageRouter<MessageBatch> parsedMessageRouter, MessageRouter<RawMessageBatch> rawMessageRouter) throws IOException, TimeoutException {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
@@ -279,34 +247,17 @@ public class MicroserviceMain {
                 .publish()
                 .refCount(2);
 
-        subscribeToPackAndPublish(routingKeyMap, batchConnectable.map(ConnectivityBatch::convertToProtoRawBatch), mqFactory,
-                direction, exchangeName, ContentType.RAW,
-                batch -> batch.getMessagesList().get(0).getMetadata().getId(),
-                RawMessageBatch::getMessagesCount);
+        batchConnectable
+                .map(ConnectivityBatch::convertToProtoRawBatch)
+                .subscribe(it -> rawMessageRouter.send(it, direction == Direction.FIRST ? "first" : "second", "publish", "raw"));
         LOGGER.info("Subscribed to transfer raw batch group {}", direction);
 
-        subscribeToPackAndPublish(routingKeyMap, batchConnectable.map(ConnectivityBatch::convertToProtoParsedBatch), mqFactory,
-                direction, exchangeName, ContentType.PARSED,
-                batch -> batch.getMessagesList().get(0).getMetadata().getId(),
-                MessageBatch::getMessagesCount);
+        batchConnectable
+                .map(ConnectivityBatch::convertToProtoParsedBatch)
+                .subscribe(it -> parsedMessageRouter.send(it, direction == Direction.FIRST ? "first" : "second", "publish", "parsed"));
         LOGGER.info("Subscribed to transfer parsed batch group {}", direction);
 
         LOGGER.info("Connected to publish batches group {}", direction);
-    }
-
-    private static <T extends MessageLite> void subscribeToPackAndPublish(Map<ConnectionType, String> routingKeyMap, Flowable<T> batchConnectable,
-            IMQFactory mqFactory, Direction direction, String exchangeName, ContentType contentType, Function<T, MessageID> extractMessageID, Function<T, Integer> extractSize) throws IOException {
-        String routingKeyParsed = routingKeyMap.get(new ConnectionType(direction, contentType));
-        batchConnectable.doOnNext(batch -> {
-            MessageID messageID = extractMessageID.apply(batch);
-            LOGGER.debug("The '{}' batch seq '{}:{}:{}' size '{}' is transfered to queue '{}:{}'",
-                    contentType, messageID.getConnectionId().getSessionAlias(), messageID.getDirection(), messageID.getSequence(),
-                    extractSize.apply(batch), exchangeName, routingKeyParsed);
-        })
-                .map(MessageLite::toByteArray)
-                .subscribe(mqFactory.createBytesPublisher(exchangeName, ExchnageType.DIRECT,
-                        routingKeyParsed));
-        LOGGER.info("Subscribed to transfer '{}' batch group {}", contentType, direction);
     }
 
     private interface Disposable {
@@ -338,15 +289,6 @@ public class MicroserviceMain {
         }
     }
 
-    @NotNull
-    private static Map<ConnectionType, String> createRoutingKeyMap(Configuration configuration) {
-        return Map.of(
-                new ConnectionType(Direction.FIRST, ContentType.RAW), configuration.getInRawQueueName(),
-                new ConnectionType(Direction.FIRST, ContentType.PARSED), configuration.getInQueueName(),
-                new ConnectionType(Direction.SECOND, ContentType.RAW), configuration.getOutRawQueueName(),
-                new ConnectionType(Direction.SECOND, ContentType.PARSED), configuration.getOutQueueName());
-    }
-
     // FIXME: Request to a disctinct service to get actual values
     private static Map<Direction, AtomicLong> getActualSequences() {
         return Map.copyOf(Stream.of(Direction.values())
@@ -359,23 +301,50 @@ public class MicroserviceMain {
         return now.getEpochSecond() * NANOSECONDS_IN_SECOND + now.getNano();
     }
 
-    private static Configuration getConfiguration() {
-        Configuration configuration = new Configuration(getEnvGRPCPort(),
-                getEnvSessionAlias(), getEnvRabbitMQExchangeNameTH2Connectivity());
-        configuration.setRabbitMQHost(getEnvRabbitMQHost());
-        configuration.setRabbitMQVirtualHost(getEnvRabbitMQVhost());
-        configuration.setRabbitMQPort(getEnvRabbitMQPort());
-        configuration.setRabbitMQUserName(getEnvRabbitMQUser());
-        configuration.setRabbitMQPassword(getEnvRabbitMQPass());
-        return configuration;
+    // this method is public for test purposes
+    public static IServiceProxy loadService(IServiceFactory serviceFactory,
+            CommonFactory commonFactory,
+            ConnectivityConfiguration configuration,
+            IServiceListener serviceListener) {
+        try {
+            IServiceProxy service = serviceFactory.createService(ServiceName.parse(configuration.getName()),
+                    SailfishURI.unsafeParse(SailfishURIUtils.sanitize(configuration.getType())),
+                    serviceListener);
+
+            ISettingsProxy settings = service.getSettings();
+
+            for (Entry<String, Object> settingsEntry : configuration.getSettings().entrySet()) {
+                String settingName = settingsEntry.getKey();
+                Object castValue = castValue(settings, settingName, settingsEntry.getValue());
+                settings.setParameterValue(settingName, castValue);
+            }
+
+            for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
+                InputStream stream = commonFactory.readDictionary(com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name()));
+                SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
+                settings.setDictionary(sfDictionaryType, uri);
+            }
+
+            return service;
+        } catch (ConversionException | ServiceFactoryException e) {
+            throw new RuntimeException(String.format("Could not load service '%s'", configuration.getName()), e);
+        }
     }
 
-    private static IServiceProxy loadService(IServiceFactory serviceFactory, File servicePath, IServiceListener serviceListener) {
-        try (InputStream serviceStream = new FileInputStream(servicePath)) {
-            return serviceFactory.createService(serviceStream, serviceListener);
-        } catch (IOException | ServiceFactoryException e) {
-            throw new RuntimeException(String.format("Could not import service %s", servicePath), e);
+    private static Object castValue(ISettingsProxy settings, String settingName, Object value) {
+        Class<?> settingType = primitiveToWrapper(settings.getParameterType(settingName));
+
+        if (settingType == null) {
+            throw new IllegalArgumentException("Can not find setting '" + settingName + "' in service");
         }
+
+        if (SailfishURI.class.isAssignableFrom(settingType)) {
+            return SailfishURI.unsafeParse(value.toString());
+        }
+        if (MultiConverter.SUPPORTED_TYPES.contains(settingType)) {
+            return MultiConverter.convert(value, settingType);
+        }
+        return value;
     }
 
     @SuppressWarnings("ParameterNameDiffersFromOverriddenParameter")
@@ -396,7 +365,7 @@ public class MicroserviceMain {
                 LOGGER.info("Subscribed to pipeline");
                 serviceProxy.start();
                 messageSender.start();
-            } catch (IOException | TimeoutException e) {
+            } catch (Exception e) {
                 LOGGER.error("Services starting failure", e);
                 Exceptions.propagate(e);
             }
@@ -416,54 +385,5 @@ public class MicroserviceMain {
         public void onNext(T object) {
             // Do nothing
         }
-    }
-
-    private static class ConnectionType {
-        private final Direction direction;
-        private final ContentType contentType;
-
-        private ConnectionType(Direction direction, ContentType contentType) {
-            this.direction = direction;
-            this.contentType = contentType;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-
-            if (obj == null || getClass() != obj.getClass()) {
-                return false;
-            }
-
-            ConnectionType another = (ConnectionType)obj;
-
-            return new EqualsBuilder()
-                    .append(direction, another.direction)
-                    .append(contentType, another.contentType)
-                    .isEquals();
-        }
-
-        @Override
-        public int hashCode() {
-            return new HashCodeBuilder()
-                    .append(direction)
-                    .append(contentType)
-                    .toHashCode();
-        }
-
-        @Override
-        public String toString() {
-            return new ToStringBuilder(this)
-                    .append("direction", direction)
-                    .append("contentType", contentType)
-                    .toString();
-        }
-    }
-
-    private enum ContentType {
-        RAW,
-        PARSED
     }
 }

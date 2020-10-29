@@ -37,7 +37,6 @@ import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageMetadata;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.TextFormat;
 import com.google.protobuf.Timestamp;
 
 public class ConnectivityMessage {
