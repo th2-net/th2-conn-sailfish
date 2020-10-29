@@ -13,13 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-package com.exactpro.th2;
+@file:JvmName("ConnectivityMetrics")
 
-import com.exactpro.sf.common.messages.IMessage;
-import com.exactpro.th2.common.grpc.Direction;
+package com.exactpro.th2.conn.metrics
 
-import java.io.Closeable;
+import com.exactpro.sf.services.ServiceStatus
+import io.prometheus.client.Gauge
 
-public interface IQueueService extends Closeable {
-    void store(Direction direction, IMessage message);
+private val SESSION_STATUS_METRIC = Gauge.build("th2_connectivity_status", "Session status")
+    .labelNames("session", "status")
+    .register()
+
+/**
+ * Publishes session status as a Prometheus metric
+ */
+fun publishSessionStatus(sessionAlias: String, currentStatus: ServiceStatus) {
+    ServiceStatus.values().forEach { status ->
+        SESSION_STATUS_METRIC.labels(sessionAlias, status.toString()).set(if (status == currentStatus) 1.0 else 0.0)
+    }
 }

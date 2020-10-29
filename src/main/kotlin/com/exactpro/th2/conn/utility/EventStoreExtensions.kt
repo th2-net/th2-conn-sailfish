@@ -17,22 +17,22 @@
 package com.exactpro.th2.conn.utility
 
 import com.exactpro.th2.common.event.Event
-import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub
-import com.exactpro.th2.estore.grpc.StoreEventRequest
+import com.exactpro.th2.common.grpc.EventBatch
+import com.exactpro.th2.common.schema.message.MessageRouter
 import com.fasterxml.jackson.core.JsonProcessingException
 import org.slf4j.LoggerFactory
 
 // FIXME: incorrect definition
-private val LOGGER = LoggerFactory.getLogger("com.exactpro.th2.connectivity.utility.EventStoreExtensions")
+private val LOGGER = LoggerFactory.getLogger("com.exactpro.th2.conn.utility.EventStoreExtensions")
 
 @JvmOverloads
 @Throws(JsonProcessingException::class)
-fun EventStoreServiceBlockingStub.storeEvent(event: Event, parentEventID: String? = null) {
-    val response = storeEvent(StoreEventRequest.newBuilder()
-        .setEvent(event.toProtoEvent(parentEventID))
-        .build())
-    if (response.hasError()) {
-        throw RuntimeException("Evnet '" + event.id + "' store failure, reason: " + response.error.value)
+fun MessageRouter<EventBatch>.storeEvent(event: Event, parentEventID: String? = null) : Event {
+    try {
+        send(EventBatch.newBuilder().addEvents(event.toProtoEvent(parentEventID)).build(), "publish", "event")
+    } catch (e: Exception) {
+        throw RuntimeException("Event '" + event.id + "' store failure", e)
     }
-    LOGGER.debug("Event '{}' sent", event.id)
+    LOGGER.debug("Event {} sent", event.id)
+    return event
 }

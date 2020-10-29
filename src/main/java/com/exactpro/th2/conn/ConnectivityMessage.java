@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.exactpro.th2;
+package com.exactpro.th2.conn;
 
 import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
 import static com.google.protobuf.TextFormat.shortDebugString;
@@ -37,7 +37,6 @@ import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageMetadata;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.TextFormat;
 import com.google.protobuf.Timestamp;
 
 public class ConnectivityMessage {

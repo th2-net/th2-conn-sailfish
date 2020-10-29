@@ -25,6 +25,7 @@ allprojects {
             url sharedDir
         }
         mavenCentral()
+
         maven {
             name 'Artifactory snapshot'
             url 'http://artifactory5.exp.exactpro.com/artifactory/libs-snapshot'
@@ -35,6 +36,7 @@ allprojects {
         }
         mavenLocal()
 
+
         configurations.all {
             resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
             resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
@@ -42,7 +44,7 @@ allprojects {
     }
 
     dependencies {
-        api platform('com.exactpro.th2:bom:2.0.+')
+        api platform('com.exactpro.th2:bom:2.1.+')
     }
 
 
@@ -116,7 +118,6 @@ compileKotlin {
 dependencies {
     implementation "com.exactpro.th2:common"
     implementation "com.exactpro.th2:sailfish-utils"
-    implementation "com.exactpro.th2:grpc-estore"
     implementation "com.exactpro.th2:grpc-common"
     implementation "com.exactpro.cradle:cradle-core"
 
@@ -128,7 +129,7 @@ dependencies {
 
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
 
-    implementation "com.rabbitmq:amqp-client:5.8.0"
+    implementation 'io.prometheus:simpleclient'
 
     implementation "com.exactpro.sf:sailfish-core:${sailfishVersion}"
 
@@ -138,7 +139,7 @@ dependencies {
 artifactoryPublish.skip = true
 
 application {
-    mainClassName 'com.exactpro.th2.MicroserviceMain'
+    mainClassName 'com.exactpro.th2.conn.MicroserviceMain'
 }
 
 applicationName = 'service'
