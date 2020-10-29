@@ -138,7 +138,7 @@ dependencies {
 artifactoryPublish.skip = true
 
 application {
-    mainClassName 'com.exactpro.th2.MicroserviceMain'
+    mainClassName 'com.exactpro.th2.conn.MicroserviceMain'
 }
 
 applicationName = 'service'

@@ -1,4 +1,4 @@
-/******************************************************************************
+/*
  * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,14 +12,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- ******************************************************************************/
-package com.exactpro.th2;
+ */
+package com.exactpro.th2.conn
 
-import com.exactpro.sf.common.messages.IMessage;
-import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.Direction
 
-import java.io.Closeable;
-
-public interface IQueueService extends Closeable {
-    void store(Direction direction, IMessage message);
-}
+/**
+ * Class contains list of related messages that must be published in the same [ConnectivityBatch]
+ */
+data class RelatedMessagesBatch(
+    val direction: Direction,
+    val messages: List<ConnectivityMessage>
+)

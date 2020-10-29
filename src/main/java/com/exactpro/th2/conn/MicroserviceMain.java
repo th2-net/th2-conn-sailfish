@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.exactpro.th2;
+package com.exactpro.th2.conn;
 
 import static com.exactpro.cradle.messages.StoredMessageBatch.MAX_MESSAGES_COUNT;
 import static com.exactpro.th2.configuration.Configuration.getEnvGRPCPort;

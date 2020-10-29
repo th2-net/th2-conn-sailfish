@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.exactpro.th2;
+package com.exactpro.th2.conn;
 
 import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.common.util.EvolutionBatch;
@@ -29,7 +29,6 @@ import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.estore.grpc.EventStoreServiceGrpc.EventStoreServiceBlockingStub;
 import com.exactpro.th2.common.grpc.Direction;
-import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
@@ -41,7 +40,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 import org.jetbrains.annotations.NotNull;
 import org.reactivestreams.Subscriber;

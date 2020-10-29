@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
-package com.exactpro.th2;
+package com.exactpro.th2.conn;
 
 import io.grpc.BindableService;
 import io.grpc.Server;
