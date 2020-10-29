@@ -14,4 +14,4 @@ ENV RABBITMQ_HOST=rabbitmq \
     DISABLE_GRPC=false
 WORKDIR /home
 COPY --from=build /home/gradle/build/docker .
-ENTRYPOINT ["/home/service/bin/service", "/home/sailfish/workspace", "service.xml"]
+ENTRYPOINT ["/home/service/bin/service"]
