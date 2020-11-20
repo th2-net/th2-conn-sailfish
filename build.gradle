@@ -9,7 +9,6 @@ plugins {
 allprojects {
     apply plugin: 'base'
     apply plugin: 'maven-publish'
-    apply plugin: 'com.jfrog.artifactory'
     apply plugin: 'java-library'
 
     ext {
@@ -27,12 +26,12 @@ allprojects {
         mavenCentral()
 
         maven {
-            name 'Artifactory snapshot'
-            url 'http://artifactory5.exp.exactpro.com/artifactory/libs-snapshot'
+            name 'Bintray'
+            url 'https://dl.bintray.com/exactpro/th2'
         }
         maven {
-            name 'Artifactory release'
-            url 'http://artifactory5.exp.exactpro.com/artifactory/libs-release'
+            name 'Bintray'
+            url 'https://dl.bintray.com/exactpro/sailfish'
         }
         mavenLocal()
 
@@ -44,7 +43,7 @@ allprojects {
     }
 
     dependencies {
-        api platform('com.exactpro.th2:bom:2.1.+')
+        api platform('com.exactpro.th2:bom:2.7.+')
     }
 
 
@@ -77,26 +76,6 @@ allprojects {
         }
     }
 
-    artifactory {
-        publish {
-            contextUrl = "${artifactory_url}"
-            repository {
-                repoKey = "${artifactory_deploy_repo_key}" // The Artifactory repository key to publish to
-                username = "${artifactory_user}" // The publisher user name
-                password = "${artifactory_password}" // The publisher password
-            }
-            defaults {
-                // Reference to Gradle publications defined in the build script.
-                // This is how we tell the Artifactory Plugin which artifacts should be
-                // published to Artifactory.
-                publications('mavenJava')
-                publishArtifacts = true
-                publishBuildInfo = true
-                // Properties to be attached to the published artifacts.
-                publishPom = true
-            }
-        }
-    }
 }
 
 apply plugin: 'kotlin'
@@ -105,7 +84,7 @@ apply plugin: 'com.palantir.docker'
 apply plugin: 'java-library'
 
 ext {
-    sailfishVersion                 = '3.2-SNAPSHOT'
+    sailfishVersion                 = '3.2'
 }
 
 sourceCompatibility = 1.11
@@ -119,7 +98,7 @@ dependencies {
     implementation "com.exactpro.th2:common"
     implementation "com.exactpro.th2:sailfish-utils"
     implementation "com.exactpro.th2:grpc-common"
-    implementation "com.exactpro.cradle:cradle-core"
+//    implementation "com.exactpro.cradle:cradle-core"
 
     implementation "org.slf4j:slf4j-log4j12"
     implementation "org.slf4j:slf4j-api"
@@ -135,8 +114,6 @@ dependencies {
 
     testImplementation 'junit:junit:4.12'
 }
-
-artifactoryPublish.skip = true
 
 application {
     mainClassName 'com.exactpro.th2.conn.MicroserviceMain'
