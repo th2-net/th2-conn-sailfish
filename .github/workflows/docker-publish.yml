@@ -2,10 +2,11 @@ name: Build and publish Docker distributions to Github Container Registry ghcr.i
 
 on:
   push:
-#     branches:
-#     - master
+    branches:
+    - master
 #     paths:
 #    - gradle.properties
+#    - package_info.json  
 
 jobs:
   build:
@@ -19,6 +20,8 @@ jobs:
         registry: ghcr.io
         username: ${{ github.repository_owner }}
         password: ${{ secrets.CR_PAT }}
+    - run: echo "::set-output name=REPOSITORY_NAME::$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')"
+      id: meta
     - name: Read version from gradle.properties
       id: read_property
       uses: christian-draeger/read-properties@1.0.1
@@ -31,3 +34,4 @@ jobs:
       with:
         push: true
         tags: ghcr.io/${{ github.repository }}:${{ steps.read_property.outputs.value }}
+        labels: com.exactpro.th2.${{ steps.meta.outputs.REPOSITORY_NAME }}=${{ steps.read_property.outputs.value }}
