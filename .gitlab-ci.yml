@@ -1,10 +1,7 @@
 variables:
   APP_NAME: "th2-conn"
-  MAJOR_VERSION: "2"
-  MINOR_VERSION: "2"
-  MAINTENANCE_VERSION: "2"
 
 include:
-  - project: 'vivarium/th2/pipelines'
+  - project: "vivarium/th2/pipelines"
     ref: master
-    file: '/.gitlab-ci-java.yml'
+    file: "/.gitlab-ci-java.yml"
