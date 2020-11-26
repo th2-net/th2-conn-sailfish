@@ -76,7 +76,7 @@ public class MessageSender {
                 }
                 logger.debug("Converted {}.{} message {}", message.getNamespace(), message.getName(), message);
                 IMessage sendMessage = serviceProxy.send(message);
-                logger.debug("message sent {}.{}: {}", sendMessage.getNamespace(), sendMessage.getName(), sendMessage);
+                logger.debug("Message sent {}.{}: {}", sendMessage.getNamespace(), sendMessage.getName(), sendMessage);
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", consumerTag, e);
             } catch (RuntimeException e) {
