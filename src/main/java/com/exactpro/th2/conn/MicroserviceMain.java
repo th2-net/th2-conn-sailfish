@@ -313,7 +313,7 @@ public class MicroserviceMain {
     public static IServiceProxy loadService(IServiceFactory serviceFactory,
             CommonFactory commonFactory,
             ConnectivityConfiguration configuration,
-            IServiceListener serviceListener) {
+            IServiceListener serviceListener) throws IOException {
         try {
             IServiceProxy service = serviceFactory.createService(ServiceName.parse(configuration.getName()),
                     SailfishURI.unsafeParse(SailfishURIUtils.sanitize(configuration.getType())),
@@ -328,9 +328,11 @@ public class MicroserviceMain {
             }
 
             for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
-                InputStream stream = commonFactory.readDictionary(com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name()));
-                SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
-                settings.setDictionary(sfDictionaryType, uri);
+                var dictionaryType = com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name());
+                try (InputStream stream = commonFactory.readDictionary(dictionaryType)) {
+                    SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
+                    settings.setDictionary(sfDictionaryType, uri);
+                }
             }
 
             return service;
