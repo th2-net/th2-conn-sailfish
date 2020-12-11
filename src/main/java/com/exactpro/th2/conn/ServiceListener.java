@@ -42,10 +42,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.jetbrains.annotations.NotNull;
 import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.reactivex.rxjava3.annotations.NonNull;
 
 public class ServiceListener implements IServiceListener {
 
@@ -93,11 +94,7 @@ public class ServiceListener implements IServiceListener {
                     .status(Status.FAILED)
                     .type("Error");
 
-            Throwable error = cause;
-            do {
-                event.bodyData(EventUtils.createMessageBean(error.getMessage()));
-                error = error.getCause();
-            } while(error != null);
+            EventStoreExtensions.addException(event, cause);
 
             EventStoreExtensions.storeEvent(eventBatchRouter, event,
                     rootEventID);
@@ -146,7 +143,7 @@ public class ServiceListener implements IServiceListener {
         }
     }
 
-    @NotNull
+    @NonNull
     private ConnectivityMessage createConnectivityMessage(IMessage message, Direction direction, AtomicLong directionSeq) {
         long sequence = directionSeq.incrementAndGet();
         LOGGER.debug("On message: direction '{}'; sequence '{}'; message '{}'", direction, sequence, message);

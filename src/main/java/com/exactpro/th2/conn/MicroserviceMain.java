@@ -44,7 +44,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,10 +69,12 @@ import com.exactpro.th2.common.grpc.EventBatch;
 import com.exactpro.th2.common.grpc.MessageBatch;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
+import com.exactpro.th2.conn.utility.EventHolder;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.reactivex.rxjava3.annotations.NonNull;
@@ -159,7 +160,8 @@ public class MicroserviceMain {
             SailfishURI senderDictionaryURI = serviceProxy.getSettings().getDictionary(dictionaryType);
             IDictionaryStructure dictionary = serviceFactory.getDictionary(senderDictionaryURI);
 
-            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch);
+            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch,
+                    eventHolder -> storeEventHolderUnsafe(eventBatchRouter, eventHolder, rootEventID));
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();
@@ -173,6 +175,18 @@ public class MicroserviceMain {
         } catch (RuntimeException e) { LOGGER.error(e.getMessage(), e); exitCode = 5;
         } finally {
             System.exit(exitCode); // Initiate close JVM with all resource leaks.
+        }
+    }
+
+    private static void storeEventHolderUnsafe(MessageRouter<EventBatch> router, EventHolder eventHolder, String rootParentId) {
+        Event event = eventHolder.getEvent();
+        try {
+            String eventParentId = eventHolder.getParentEventID();
+            storeEvent(router, event, eventParentId == null ? rootParentId : eventParentId);
+        } catch (JsonProcessingException e) {
+            LOGGER.error("Cannot convert data to JSON to store event with id {}", event.getId(), e);
+        } catch (Exception e) {
+            LOGGER.error("Cannot store event with id {}", event.getId(), e);
         }
     }
 
