@@ -25,18 +25,17 @@ import com.exactpro.sf.services.ServiceEvent.Level;
 import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
-import com.exactpro.th2.common.event.EventUtils;
-import com.exactpro.th2.common.grpc.EventBatch;
+import com.exactpro.th2.conn.events.EventDispatcher;
+import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
-import com.exactpro.th2.common.schema.message.MessageRouter;
-import com.fasterxml.jackson.core.JsonProcessingException;
 
 import static com.exactpro.th2.common.grpc.Direction.FIRST;
 import static com.exactpro.th2.common.grpc.Direction.SECOND;
 import static java.util.Objects.requireNonNull;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -56,18 +55,20 @@ public class ServiceListener implements IServiceListener {
     private final IMessageToProtoConverter converter;
     private final String sessionAlias;
     private final Subscriber<RelatedMessagesBatch> subscriber;
-    private final MessageRouter<EventBatch> eventBatchRouter;
-    private final String rootEventID;
+    private final EventDispatcher eventDispatcher;
 
-    public ServiceListener(Map<Direction, AtomicLong> directionToSequence, IMessageToProtoConverter converter, String sessionAlias, Subscriber<RelatedMessagesBatch> subscriber,
-            MessageRouter<EventBatch> eventBatchRouter, String rootEventID
+    public ServiceListener(
+            Map<Direction, AtomicLong> directionToSequence,
+            IMessageToProtoConverter converter,
+            String sessionAlias,
+            Subscriber<RelatedMessagesBatch> subscriber,
+            EventDispatcher eventDispatcher
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.converter = requireNonNull(converter, "Converter can't be null");
         this.sessionAlias = requireNonNull(sessionAlias, "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
-        this.eventBatchRouter = requireNonNull(eventBatchRouter, "Event batch router can't be null");
-        this.rootEventID = requireNonNull(rootEventID, "Root event ID can't be null");
+        this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
     }
 
     @Override
@@ -96,9 +97,8 @@ public class ServiceListener implements IServiceListener {
 
             EventStoreExtensions.addException(event, cause);
 
-            EventStoreExtensions.storeEvent(eventBatchRouter, event,
-                    rootEventID);
-        } catch (RuntimeException | JsonProcessingException e) {
+            eventDispatcher.store(EventHolder.createError(event));
+        } catch (RuntimeException | IOException e) {
             LOGGER.error("Store event related to internal error failure", e);
         }
     }
@@ -136,9 +136,8 @@ public class ServiceListener implements IServiceListener {
                     .type("Service event")
                     .description(serviceEvent.getDetails());
 
-            EventStoreExtensions.storeEvent(eventBatchRouter, event,
-                    rootEventID);
-        } catch (RuntimeException | JsonProcessingException e) {
+            eventDispatcher.store(EventHolder.createServiceEvent(event));
+        } catch (RuntimeException | IOException e) {
             LOGGER.error("Store event related to internal event failure", e);
         }
     }

@@ -22,12 +22,12 @@ import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
 import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
+import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
 import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
-import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,13 +68,13 @@ import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
 import com.exactpro.th2.common.grpc.MessageBatch;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
-import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
-import com.exactpro.th2.conn.utility.EventHolder;
-import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
-import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
+import com.exactpro.th2.conn.events.EventDispatcher;
+import com.exactpro.th2.conn.events.EventType;
+import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
+import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.reactivex.rxjava3.annotations.NonNull;
@@ -144,11 +144,23 @@ public class MicroserviceMain {
 
             MessageRouter<EventBatch> eventBatchRouter = factory.getEventBatchRouter();
 
-            String rootEventID = storeEvent(eventBatchRouter, Event.start().endTimestamp()
+            var rootEvent = Event.start().endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
-                    .type("Microservice")).getId();
+                    .type("Microservice");
+            var errorEventsRoot = rootEvent.addSubEventWithSamePeriod()
+                    .name("Errors")
+                    .type("ConnectivityErrors");
+            var serviceEventsRoot = rootEvent.addSubEventWithSamePeriod()
+                    .name("ServiceEvents")
+                    .type("ConnectivityServiceEvents");
 
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventBatchRouter, rootEventID);
+            String rootEventID = storeEvent(eventBatchRouter, rootEvent).getId();
+            var eventDispatcher = EventDispatcher.createDispatcher(eventBatchRouter, rootEventID, Map.of(
+                    EventType.ERROR, errorEventsRoot.getId(),
+                    EventType.SERVICE_EVENT, serviceEventsRoot.getId()
+            ));
+
+            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventDispatcher);
             IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             disposer.register(() -> {
                 LOGGER.info("Stop service proxy");
@@ -160,8 +172,7 @@ public class MicroserviceMain {
             SailfishURI senderDictionaryURI = serviceProxy.getSettings().getDictionary(dictionaryType);
             IDictionaryStructure dictionary = serviceFactory.getDictionary(senderDictionaryURI);
 
-            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch,
-                    eventHolder -> storeEventHolderUnsafe(eventBatchRouter, eventHolder, rootEventID));
+            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch, eventDispatcher);
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();
@@ -175,18 +186,6 @@ public class MicroserviceMain {
         } catch (RuntimeException e) { LOGGER.error(e.getMessage(), e); exitCode = 5;
         } finally {
             System.exit(exitCode); // Initiate close JVM with all resource leaks.
-        }
-    }
-
-    private static void storeEventHolderUnsafe(MessageRouter<EventBatch> router, EventHolder eventHolder, String rootParentId) {
-        Event event = eventHolder.getEvent();
-        try {
-            String eventParentId = eventHolder.getParentEventID();
-            storeEvent(router, event, eventParentId == null ? rootParentId : eventParentId);
-        } catch (JsonProcessingException e) {
-            LOGGER.error("Cannot convert data to JSON to store event with id {}", event.getId(), e);
-        } catch (Exception e) {
-            LOGGER.error("Cannot store event with id {}", event.getId(), e);
         }
     }
 

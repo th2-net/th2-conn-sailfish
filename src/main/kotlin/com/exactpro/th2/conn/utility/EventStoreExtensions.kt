@@ -30,7 +30,6 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import com.google.protobuf.MessageOrBuilder
 import com.google.protobuf.util.JsonFormat
 import mu.KotlinLogging
-import org.slf4j.LoggerFactory
 
 private val LOGGER = KotlinLogging.logger { }
 
@@ -59,11 +58,6 @@ fun Event.addException(t: Throwable) {
 fun createProtoMessageBean(msg: MessageOrBuilder): IBodyData {
     return ProtoMessageData(msg)
 }
-
-class EventHolder @JvmOverloads constructor(
-    val event: Event,
-    val parentEventID: String? = null
-)
 
 @JsonSerialize(using = ProtoMessageSerializer::class)
 class ProtoMessageData(

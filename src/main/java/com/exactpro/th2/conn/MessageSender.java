@@ -21,7 +21,6 @@ import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.setParent
 import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
-import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +34,8 @@ import com.exactpro.th2.common.grpc.Message;
 import com.exactpro.th2.common.grpc.MessageBatch;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
-import com.exactpro.th2.conn.utility.EventHolder;
+import com.exactpro.th2.conn.events.EventDispatcher;
+import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.conn.utility.MetadataProperty;
 import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
@@ -47,17 +47,17 @@ public class MessageSender {
     private final IServiceProxy serviceProxy;
     private final MessageRouter<MessageBatch> router;
     private final ProtoToIMessageConverter protoToIMessageConverter;
-    private final Consumer<EventHolder> eventConsumer;
+    private final EventDispatcher eventDispatcher;
     private volatile SubscriberMonitor subscriberMonitor;
 
     public MessageSender(IServiceProxy serviceProxy,
                          ProtoToIMessageConverter protoToIMessageConverter,
                          MessageRouter<MessageBatch> router,
-                         Consumer<EventHolder> eventConsumer) {
+                         EventDispatcher eventDispatcher) {
         this.serviceProxy = requireNonNull(serviceProxy, "Service proxy can't be null");
         this.protoToIMessageConverter = requireNonNull(protoToIMessageConverter, "Protobuf to IMessage converter can't be null") ;
         this.router = requireNonNull(router, "Message router can't be null");
-        this.eventConsumer = eventConsumer;
+        this.eventDispatcher = requireNonNull(eventDispatcher, "'Event dispatcher' parameter");
     }
 
     public void start() {
@@ -110,9 +110,10 @@ public class MessageSender {
                     .bodyData(EventUtils.createMessageBean("Protobuf message:"))
                     .bodyData(EventStoreExtensions.createProtoMessageBean(protoMessage));
             EventStoreExtensions.addException(errorEvent, ex);
-            eventConsumer.accept(new EventHolder(errorEvent,
-                    protoMessage.hasParentEventId() ? protoMessage.getParentEventId().getId() : null)
-            );
+            String parentId = protoMessage.hasParentEventId()
+                    ? protoMessage.getParentEventId().getId()
+                    : null;
+            storeErrorEvent(errorEvent, parentId);
             throw ex;
         }
     }
@@ -128,8 +129,20 @@ public class MessageSender {
             String parentId = contains(message.getMetaData(), MetadataProperty.PARENT_EVENT_ID)
                     ? getParentEventID(message.getMetaData()).toString()
                     : null;
-            eventConsumer.accept(new EventHolder(errorEvent, parentId));
+            storeErrorEvent(errorEvent, parentId);
             throw ex;
+        }
+    }
+
+    private void storeErrorEvent(Event errorEvent, String parentId) {
+        try {
+            if (parentId == null) {
+                eventDispatcher.store(EventHolder.createError(errorEvent));
+            } else {
+                eventDispatcher.store(errorEvent, parentId);
+            }
+        } catch (IOException e) {
+            logger.error("Cannot store event {} (parentId: {})", errorEvent.getId(), parentId, e);
         }
     }
 
