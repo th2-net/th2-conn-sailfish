@@ -153,11 +153,12 @@ public class MicroserviceMain {
             var errorEventsRoot = Event.start().endTimestamp()
                     .name("Errors")
                     .type("ConnectivityErrors");
+            storeEvent(eventBatchRouter, errorEventsRoot, rootEventID);
+
             var serviceEventsRoot = Event.start().endTimestamp()
                     .name("ServiceEvents")
                     .type("ConnectivityServiceEvents");
-
-            storeEvents(eventBatchRouter, rootEventID, errorEventsRoot, serviceEventsRoot);
+            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
 
             var eventDispatcher = EventDispatcher.createDispatcher(eventBatchRouter, rootEventID, Map.of(
                     EventType.ERROR, errorEventsRoot.getId(),
