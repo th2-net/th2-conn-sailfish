@@ -20,6 +20,7 @@ import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.common.event.EventUtils
 import com.exactpro.th2.common.event.IBodyData
 import com.exactpro.th2.common.grpc.EventBatch
+import com.exactpro.th2.common.grpc.EventID
 import com.exactpro.th2.common.schema.message.MessageRouter
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.core.JsonGenerator
@@ -43,6 +44,30 @@ fun MessageRouter<EventBatch>.storeEvent(event: Event, parentEventID: String? = 
     }
     LOGGER.debug("Event {} sent", event.id)
     return event
+}
+
+/**
+ * @param parentEventID the ID of the root parent that all events should be attached.
+ *                      If `null` the events will be stored as a root events (without attaching to any parent).
+ * @param events events to store
+ */
+@JvmOverloads
+@Throws(JsonProcessingException::class)
+fun MessageRouter<EventBatch>.storeEvents(parentEventID: String? = null, vararg events: Event) {
+    try {
+        val batchBuilder = EventBatch.newBuilder().apply {
+            if (parentEventID != null) {
+                setParentEventId(EventID.newBuilder().setId(parentEventID))
+            }
+            for (event in events) {
+                addEvents(event.toProtoEvent(parentEventID))
+            }
+        }
+        send(batchBuilder.build())
+    } catch (e: Exception) {
+        throw RuntimeException("Events '" + events.map { it.id } + "' store failure", e)
+    }
+    LOGGER.debug("Events {} sent", events.map { it.id })
 }
 
 // TODO: maybe we should move it to common library

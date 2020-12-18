@@ -19,6 +19,7 @@ import static com.exactpro.cradle.messages.StoredMessageBatch.MAX_MESSAGES_COUNT
 import static com.exactpro.sf.externalapi.DictionaryType.MAIN;
 import static com.exactpro.sf.externalapi.DictionaryType.OUTGOING;
 import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
+import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvents;
 import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
@@ -147,14 +148,17 @@ public class MicroserviceMain {
             var rootEvent = Event.start().endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
                     .type("Microservice");
-            var errorEventsRoot = rootEvent.addSubEventWithSamePeriod()
+            String rootEventID = storeEvent(eventBatchRouter, rootEvent).getId();
+
+            var errorEventsRoot = Event.start().endTimestamp()
                     .name("Errors")
                     .type("ConnectivityErrors");
-            var serviceEventsRoot = rootEvent.addSubEventWithSamePeriod()
+            var serviceEventsRoot = Event.start().endTimestamp()
                     .name("ServiceEvents")
                     .type("ConnectivityServiceEvents");
 
-            String rootEventID = storeEvent(eventBatchRouter, rootEvent).getId();
+            storeEvents(eventBatchRouter, rootEventID, errorEventsRoot, serviceEventsRoot);
+
             var eventDispatcher = EventDispatcher.createDispatcher(eventBatchRouter, rootEventID, Map.of(
                     EventType.ERROR, errorEventsRoot.getId(),
                     EventType.SERVICE_EVENT, serviceEventsRoot.getId()
