@@ -33,6 +33,10 @@ allprojects {
             name 'Bintray'
             url 'https://dl.bintray.com/exactpro/sailfish'
         }
+        maven {
+            name 'Artifactory-snapshot-oss'
+            url 'https://oss.jfrog.org/artifactory/libs-snapshot'
+        }
         mavenLocal()
 
 
@@ -43,7 +47,7 @@ allprojects {
     }
 
     dependencies {
-        api platform('com.exactpro.th2:bom:2.7.+')
+        api platform('com.exactpro.th2:bom:2.10.1')
     }
 
 
@@ -84,7 +88,7 @@ apply plugin: 'com.palantir.docker'
 apply plugin: 'java-library'
 
 ext {
-    sailfishVersion                 = '3.2'
+    sailfishVersion                 = '3.2-SNAPSHOT'
 }
 
 sourceCompatibility = 1.11
@@ -96,7 +100,7 @@ compileKotlin {
 
 dependencies {
     implementation "com.exactpro.th2:common"
-    implementation "com.exactpro.th2:sailfish-utils"
+    implementation "com.exactpro.th2:sailfish-utils:2.2.2"
     implementation "com.exactpro.th2:grpc-common"
     implementation "com.exactpro.th2:cradle-core"
 
