@@ -4,7 +4,7 @@ ARG release_version
 COPY ./ .
 RUN gradle --no-daemon clean build dockerPrepare
 
-FROM openjdk:12-alpine
+FROM adoptopenjdk/openjdk11:alpine
 ENV RABBITMQ_HOST=rabbitmq \
     RABBITMQ_PORT=5672 \
     RABBITMQ_USER=guest \
