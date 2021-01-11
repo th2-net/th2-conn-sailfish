@@ -19,15 +19,16 @@ import static com.exactpro.cradle.messages.StoredMessageBatch.MAX_MESSAGES_COUNT
 import static com.exactpro.sf.externalapi.DictionaryType.MAIN;
 import static com.exactpro.sf.externalapi.DictionaryType.OUTGOING;
 import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
+import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvents;
 import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
+import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
 import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
-import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,7 +45,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,11 +69,13 @@ import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
 import com.exactpro.th2.common.grpc.MessageBatch;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
-import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
-import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
-import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
+import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
+import com.exactpro.th2.conn.events.EventDispatcher;
+import com.exactpro.th2.conn.events.EventType;
+import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
+import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.reactivex.rxjava3.annotations.NonNull;
@@ -143,11 +145,27 @@ public class MicroserviceMain {
 
             MessageRouter<EventBatch> eventBatchRouter = factory.getEventBatchRouter();
 
-            String rootEventID = storeEvent(eventBatchRouter, Event.start().endTimestamp()
+            var rootEvent = Event.start().endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
-                    .type("Microservice")).getId();
+                    .type("Microservice");
+            String rootEventID = storeEvent(eventBatchRouter, rootEvent).getId();
 
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventBatchRouter, rootEventID);
+            var errorEventsRoot = Event.start().endTimestamp()
+                    .name("Errors")
+                    .type("ConnectivityErrors");
+            storeEvent(eventBatchRouter, errorEventsRoot, rootEventID);
+
+            var serviceEventsRoot = Event.start().endTimestamp()
+                    .name("ServiceEvents")
+                    .type("ConnectivityServiceEvents");
+            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
+
+            var eventDispatcher = EventDispatcher.createDispatcher(eventBatchRouter, rootEventID, Map.of(
+                    EventType.ERROR, errorEventsRoot.getId(),
+                    EventType.SERVICE_EVENT, serviceEventsRoot.getId()
+            ));
+
+            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventDispatcher);
             IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             disposer.register(() -> {
                 LOGGER.info("Stop service proxy");
@@ -159,7 +177,7 @@ public class MicroserviceMain {
             SailfishURI senderDictionaryURI = serviceProxy.getSettings().getDictionary(dictionaryType);
             IDictionaryStructure dictionary = serviceFactory.getDictionary(senderDictionaryURI);
 
-            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch);
+            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch, eventDispatcher);
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();
