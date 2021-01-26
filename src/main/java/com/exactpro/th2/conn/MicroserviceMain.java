@@ -15,11 +15,9 @@
  */
 package com.exactpro.th2.conn;
 
-import static com.exactpro.cradle.messages.StoredMessageBatch.MAX_MESSAGES_COUNT;
 import static com.exactpro.sf.externalapi.DictionaryType.MAIN;
 import static com.exactpro.sf.externalapi.DictionaryType.OUTGOING;
 import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
-import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvents;
 import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
@@ -39,7 +37,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -90,7 +87,7 @@ import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 public class MicroserviceMain {
     private static final Logger LOGGER = LoggerFactory.getLogger(MicroserviceMain.class);
 
-
+    public static final int MAX_MESSAGES_COUNT = 100;
     public static final long NANOSECONDS_IN_SECOND = 1_000_000_000L;
     public static final String PASSWORD_PARAMETER = "password";
     public static final String DEFAULT_PASSWORD_PARAMETER = "default";
@@ -255,7 +252,7 @@ public class MicroserviceMain {
     }
 
     private static void createPackAndPublishPipeline(Direction direction, Flowable<RelatedMessagesBatch> messageConnectable,
-                                                     MessageRouter<MessageBatch> parsedMessageRouter, MessageRouter<RawMessageBatch> rawMessageRouter) throws IOException, TimeoutException {
+                                                     MessageRouter<MessageBatch> parsedMessageRouter, MessageRouter<RawMessageBatch> rawMessageRouter) {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable

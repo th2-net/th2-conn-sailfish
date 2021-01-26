@@ -6,89 +6,77 @@ plugins {
     id "com.jfrog.artifactory" version '4.15.1'
 }
 
-allprojects {
-    apply plugin: 'base'
-    apply plugin: 'maven-publish'
-    apply plugin: 'java-library'
-
-    ext {
-        sharedDir                       = file("${project.rootDir}/shared")
-    }
-
-    group = 'com.exactpro.th2'
-    version = release_version
-
-    repositories {
-        maven {
-            name 'MavenLocal'
-            url sharedDir
-        }
-        mavenCentral()
-
-        maven {
-            name 'Bintray'
-            url 'https://dl.bintray.com/exactpro/th2'
-        }
-        maven {
-            name 'Bintray'
-            url 'https://dl.bintray.com/exactpro/sailfish'
-        }
-        maven {
-            name 'Artifactory-snapshot-oss'
-            url 'https://oss.jfrog.org/artifactory/libs-snapshot'
-        }
-        mavenLocal()
-
-
-        configurations.all {
-            resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
-            resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
-        }
-    }
-
-    dependencies {
-        api platform('com.exactpro.th2:bom:2.10.1')
-    }
-
-
-    jar {
-        manifest {
-            attributes(
-                    'Created-By':               "${System.getProperty('java.version')} (${System.getProperty('java.vendor')})",
-                    'Specification-Title':      '',
-                    'Specification-Vendor':     'Exactpro Systems LLC',
-                    'Implementation-Title':     project.archivesBaseName,
-                    'Implementation-Vendor':    'Exactpro Systems LLC',
-                    'Implementation-Vendor-Id': 'com.exactpro',
-                    'Implementation-Version':   project.version
-            )
-        }
-    }
-
-    publishing {
-        publications {
-            mavenJava(MavenPublication) {
-                from components.java
-            }
-        }
-
-        repositories {
-            maven {
-                name = 'localRepo'
-                url = sharedDir
-            }
-        }
-    }
-
-}
-
+apply plugin: 'base'
+apply plugin: 'maven-publish'
+apply plugin: 'java-library'
 apply plugin: 'kotlin'
 apply plugin: 'application'
 apply plugin: 'com.palantir.docker'
 apply plugin: 'java-library'
 
 ext {
+    sharedDir                       = file("${project.rootDir}/shared")
     sailfishVersion                 = '3.2-SNAPSHOT'
+}
+
+group = 'com.exactpro.th2'
+version = release_version
+
+repositories {
+    maven {
+        name 'MavenLocal'
+        url sharedDir
+    }
+    mavenCentral()
+
+    maven {
+        name 'Bintray'
+        url 'https://dl.bintray.com/exactpro/th2'
+    }
+    maven {
+        name 'Bintray'
+        url 'https://dl.bintray.com/exactpro/sailfish'
+    }
+    maven {
+        name 'Artifactory-snapshot-oss'
+        url 'https://oss.jfrog.org/artifactory/libs-snapshot'
+    }
+    mavenLocal()
+
+
+    configurations.all {
+        resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+        resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
+    }
+}
+
+jar {
+    manifest {
+        attributes(
+                'Created-By':               "${System.getProperty('java.version')} (${System.getProperty('java.vendor')})",
+                'Specification-Title':      '',
+                'Specification-Vendor':     'Exactpro Systems LLC',
+                'Implementation-Title':     project.archivesBaseName,
+                'Implementation-Vendor':    'Exactpro Systems LLC',
+                'Implementation-Vendor-Id': 'com.exactpro',
+                'Implementation-Version':   project.version
+        )
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+
+    repositories {
+        maven {
+            name = 'localRepo'
+            url = sharedDir
+        }
+    }
 }
 
 sourceCompatibility = 1.11
@@ -99,16 +87,14 @@ compileKotlin {
 }
 
 dependencies {
-    implementation "com.exactpro.th2:common"
+    api platform('com.exactpro.th2:bom:2.10.1')
+
+    implementation 'com.exactpro.th2:common:2.9.0'
     implementation "com.exactpro.th2:sailfish-utils:2.2.2"
-    implementation "com.exactpro.th2:grpc-common"
-    implementation "com.exactpro.th2:cradle-core"
+    implementation 'com.exactpro.th2:grpc-common:2.3.2'
 
     implementation "org.slf4j:slf4j-log4j12"
     implementation "org.slf4j:slf4j-api"
-
-    implementation 'com.google.protobuf:protobuf-java-util'
-    implementation 'io.grpc:grpc-stub'
 
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
 
