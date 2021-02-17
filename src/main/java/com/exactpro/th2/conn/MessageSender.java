@@ -15,47 +15,41 @@
  */
 package com.exactpro.th2.conn;
 
-import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
-import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
-import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.setParentEventID;
 import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
+import java.util.Base64;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
 import com.exactpro.th2.common.event.EventUtils;
-import com.exactpro.th2.common.grpc.Message;
-import com.exactpro.th2.common.grpc.MessageBatch;
+import com.exactpro.th2.common.grpc.EventID;
+import com.exactpro.th2.common.grpc.RawMessage;
+import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
-import com.exactpro.th2.conn.utility.MetadataProperty;
-import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 
-import io.reactivex.rxjava3.annotations.NonNull;
+import io.reactivex.rxjava3.annotations.Nullable;
 
 public class MessageSender {
+    private static final String SEND_ATTRIBUTE = "send";
     private final Logger logger = LoggerFactory.getLogger(getClass().getName() + "@" + hashCode());
     private final IServiceProxy serviceProxy;
-    private final MessageRouter<MessageBatch> router;
-    private final ProtoToIMessageConverter protoToIMessageConverter;
+    private final MessageRouter<RawMessageBatch> router;
     private final EventDispatcher eventDispatcher;
     private volatile SubscriberMonitor subscriberMonitor;
 
     public MessageSender(IServiceProxy serviceProxy,
-                         ProtoToIMessageConverter protoToIMessageConverter,
-                         MessageRouter<MessageBatch> router,
+                         MessageRouter<RawMessageBatch> router,
                          EventDispatcher eventDispatcher) {
         this.serviceProxy = requireNonNull(serviceProxy, "Service proxy can't be null");
-        this.protoToIMessageConverter = requireNonNull(protoToIMessageConverter, "Protobuf to IMessage converter can't be null") ;
         this.router = requireNonNull(router, "Message router can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "'Event dispatcher' parameter");
     }
@@ -65,7 +59,7 @@ public class MessageSender {
             throw new IllegalStateException("Already subscribe");
         }
 
-        subscriberMonitor = router.subscribeAll(this::handle, "send", "parsed");
+        subscriberMonitor = router.subscribeAll(this::handle, SEND_ATTRIBUTE);
     }
 
     public void stop() throws IOException {
@@ -81,12 +75,14 @@ public class MessageSender {
         }
     }
 
-    private void handle(String consumerTag, MessageBatch messageBatch) {
-        for (Message protoMessage : messageBatch.getMessagesList()) {
+    private void handle(String consumerTag, RawMessageBatch messageBatch) {
+        for (RawMessage protoMessage : messageBatch.getMessagesList()) {
             try {
-                IMessage message = convertToIMessage(protoMessage);
-                IMessage sentMessage = sendMessage(message);
-                logger.debug("message sent {}.{}: {}", sentMessage.getNamespace(), sentMessage.getName(), sentMessage);
+                byte[] data = protoMessage.getBody().toByteArray();
+                sendMessage(data, protoMessage.hasParentEventId() ? protoMessage.getParentEventId() : null);
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
+                }
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", consumerTag, e);
             } catch (RuntimeException e) {
@@ -95,51 +91,25 @@ public class MessageSender {
         }
     }
 
-    @NonNull
-    private IMessage convertToIMessage(Message protoMessage) {
+    private void sendMessage(byte[] data, @Nullable EventID parentId) throws InterruptedException {
         try {
-            IMessage message = protoToIMessageConverter.fromProtoMessage(protoMessage, true);
-            if (protoMessage.hasParentEventId()) {
-                setParentEventID(message.getMetaData(), protoMessage.getParentEventId());
-            }
-            logger.debug("Converted {}.{} message {}", message.getNamespace(), message.getName(), message);
-            return message;
-        } catch (Exception ex) {
-            Event errorEvent = createErrorEvent("ConversionError")
-                    .bodyData(EventUtils.createMessageBean("Cannot convert proto Message to IMessage."))
-                    .bodyData(EventUtils.createMessageBean("Protobuf message:"))
-                    .bodyData(EventStoreExtensions.createProtoMessageBean(protoMessage));
-            EventStoreExtensions.addException(errorEvent, ex);
-            String parentId = protoMessage.hasParentEventId()
-                    ? protoMessage.getParentEventId().getId()
-                    : null;
-            storeErrorEvent(errorEvent, parentId);
-            throw ex;
-        }
-    }
-
-    private IMessage sendMessage(IMessage message) throws InterruptedException {
-        try {
-            return serviceProxy.send(message);
+            serviceProxy.sendRaw(data);
         } catch (Exception ex) {
             Event errorEvent = createErrorEvent("SendError")
-                    .bodyData(EventUtils.createMessageBean("Cannot send message."))
-                    .bodyData(EventUtils.createMessageBean(message.toString()));
+                    .bodyData(EventUtils.createMessageBean("Cannot send message. Message body in base64:"))
+                    .bodyData(EventUtils.createMessageBean(Base64.getEncoder().encodeToString(data)));
             EventStoreExtensions.addException(errorEvent, ex);
-            String parentId = contains(message.getMetaData(), MetadataProperty.PARENT_EVENT_ID)
-                    ? getParentEventID(message.getMetaData()).toString()
-                    : null;
             storeErrorEvent(errorEvent, parentId);
             throw ex;
         }
     }
 
-    private void storeErrorEvent(Event errorEvent, String parentId) {
+    private void storeErrorEvent(Event errorEvent, @Nullable EventID parentId) {
         try {
             if (parentId == null) {
                 eventDispatcher.store(EventHolder.createError(errorEvent));
             } else {
-                eventDispatcher.store(errorEvent, parentId);
+                eventDispatcher.store(errorEvent, parentId.getId());
             }
         } catch (IOException e) {
             logger.error("Cannot store event {} (parentId: {})", errorEvent.getId(), parentId, e);

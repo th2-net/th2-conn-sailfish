@@ -64,15 +64,14 @@ import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
-import com.exactpro.th2.common.grpc.MessageBatch;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
+import com.exactpro.th2.common.schema.message.QueueAttribute;
 import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventType;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
-import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.reactivex.rxjava3.annotations.NonNull;
@@ -126,8 +125,6 @@ public class MicroserviceMain {
                 PIPELINE_SCHEDULER.shutdown();
             });
 
-            MessageRouter<MessageBatch> parsedMessageBatch = factory.getMessageRouterParsedBatch();
-
             FlowableProcessor<RelatedMessagesBatch> processor = UnicastProcessor.create();
             disposer.register(() -> {
                 LOGGER.info("Complite pipeline publisher");
@@ -169,18 +166,16 @@ public class MicroserviceMain {
                 serviceProxy.stop();
             });
             printServiceSetting(serviceProxy);
-            IMessageFactoryProxy messageFactory = serviceFactory.getMessageFactory(serviceProxy.getType());
-            DictionaryType dictionaryType = serviceProxy.getSettings().getDictionaryTypes().contains(OUTGOING) ? OUTGOING : MAIN;
-            SailfishURI senderDictionaryURI = serviceProxy.getSettings().getDictionary(dictionaryType);
-            IDictionaryStructure dictionary = serviceFactory.getDictionary(senderDictionaryURI);
 
-            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch, eventDispatcher);
+            MessageRouter<RawMessageBatch> rawMessageRouter = factory.getMessageRouterRawBatch();
+
+            MessageSender messageSender = new MessageSender(serviceProxy, rawMessageRouter, eventDispatcher);
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();
             });
 
-            createPipeline(processor, processor::onComplete, eventBatchRouter, parsedMessageBatch, factory.getMessageRouterRawBatch())
+            createPipeline(processor, processor::onComplete, eventBatchRouter, rawMessageRouter)
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
@@ -209,7 +204,6 @@ public class MicroserviceMain {
     private static @NonNull Flowable<Flowable<RelatedMessagesBatch>> createPipeline(
             Flowable<RelatedMessagesBatch> flowable, Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
-            MessageRouter<MessageBatch> parsedMessageRouter,
             MessageRouter<RawMessageBatch> rawMessageRouter
     ) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
@@ -227,7 +221,7 @@ public class MicroserviceMain {
                     if (direction == Direction.SECOND) {
                         subscribeToSendMessage(eventBatchRouter, messageConnectable);
                     }
-                    createPackAndPublishPipeline(direction, messageConnectable, parsedMessageRouter, rawMessageRouter);
+                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter);
 
                     return messageConnectable;
                 });
@@ -252,7 +246,7 @@ public class MicroserviceMain {
     }
 
     private static void createPackAndPublishPipeline(Direction direction, Flowable<RelatedMessagesBatch> messageConnectable,
-                                                     MessageRouter<MessageBatch> parsedMessageRouter, MessageRouter<RawMessageBatch> rawMessageRouter) {
+                                                     MessageRouter<RawMessageBatch> rawMessageRouter) {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
@@ -268,17 +262,12 @@ public class MicroserviceMain {
                     }
                 })
                 .publish()
-                .refCount(2);
+                .refCount(1);
 
         batchConnectable
                 .map(ConnectivityBatch::convertToProtoRawBatch)
-                .subscribe(it -> rawMessageRouter.send(it, direction == Direction.FIRST ? "first" : "second", "publish", "raw"));
+                .subscribe(it -> rawMessageRouter.sendAll(it, (direction == Direction.FIRST ? QueueAttribute.FIRST : QueueAttribute.SECOND).toString()));
         LOGGER.info("Subscribed to transfer raw batch group {}", direction);
-
-        batchConnectable
-                .map(ConnectivityBatch::convertToProtoParsedBatch)
-                .subscribe(it -> parsedMessageRouter.send(it, direction == Direction.FIRST ? "first" : "second", "publish", "parsed"));
-        LOGGER.info("Subscribed to transfer parsed batch group {}", direction);
 
         LOGGER.info("Connected to publish batches group {}", direction);
     }
