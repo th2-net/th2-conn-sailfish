@@ -69,10 +69,9 @@ This file must contain:
 
 ## Pins
 
-Connect has 4 types of pins for interacting with th2 components. Messages that were received from / sent to the target system will be sent to the following queues:
+Connect has 2 types of pins for interacting with th2 components.
+Messages that were received from / sent to the target system will be sent to the following queues:
 
-- incoming parsed messages // it will be removed in future
-- outgoing parsed messages // it will be removed in future
 - incoming raw messages
 - outgoing raw messages
 
@@ -98,19 +97,13 @@ spec:
     settings:
       param1: "value1"
   pins:
-    - name: in_parsed
-      connection-type: mq
-      attributes: ["first", "parsed", "publish"]
     - name: in_raw
       connection-type: mq
       attributes: ["first", "raw", "publish", "store"]
-    - name: out_parsed
-      connection-type: mq
-      attributes: ["second", "parsed", "publish"]
     - name: out_raw
       connection-type: mq
       attributes: ["second", "raw", "publish", "store"]
-    - name: fix_to_send
+    - name: to_send
       connection-type: mq
-      attributes: ["send", "parsed", "subscribe"]
+      attributes: ["send", "raw", "subscribe"]
 ```
