@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +16,31 @@
 package com.exactpro.th2.conn;
 
 import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
+import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.google.protobuf.TextFormat.shortDebugString;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 import java.util.Collections;
+import java.util.function.Function;
 
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.jetbrains.annotations.Nullable;
 
 import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
 import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.Message;
 import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.grpc.MessageMetadata;
 import com.exactpro.th2.common.grpc.RawMessage;
+import com.exactpro.th2.common.grpc.RawMessage.Builder;
 import com.exactpro.th2.common.grpc.RawMessageMetadata;
+import com.exactpro.th2.conn.utility.MetadataProperty;
+import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
@@ -64,16 +70,22 @@ public class ConnectivityMessage {
     }
 
     public RawMessage convertToProtoRawMessage() {
-        return RawMessage.newBuilder()
-                        .setMetadata(createRawMessageMetadata(messageID, timestamp, sailfishMessage.getMetaData()))
-                        .setBody(ByteString.copyFrom(sailfishMessage.getMetaData().getRawMessage()))
-                        .build();
+        IMetadata metaData = sailfishMessage.getMetaData();
+        Builder builder = RawMessage.newBuilder()
+                .setMetadata(createRawMessageMetadata(messageID, timestamp, metaData))
+                .setBody(ByteString.copyFrom(MetadataExtensions.getRawMessage(metaData)));
+
+        fillParentEventId(metaData, builder::setParentEventId);
+        return builder.build();
     }
 
     public Message convertToProtoParsedMessage() {
-        return converter.toProtoMessage(sailfishMessage)
-                        .setMetadata(createMessageMetadata(messageID, sailfishMessage.getName(), timestamp, sailfishMessage.getMetaData()))
-                        .build();
+        IMetadata metaData = sailfishMessage.getMetaData();
+        Message.Builder builder = converter.toProtoMessage(sailfishMessage)
+                .setMetadata(createMessageMetadata(messageID, sailfishMessage.getName(), timestamp, metaData));
+
+        fillParentEventId(metaData, builder::setParentEventId);
+        return builder.build();
     }
 
     public MessageID getMessageID() {
@@ -98,6 +110,19 @@ public class ConnectivityMessage {
                 .append("messageID", shortDebugString(messageID))
                 .append("timestamp", shortDebugString(timestamp))
                 .toString();
+    }
+
+    private static <T> void fillParentEventId(IMetadata metaData, Function<EventID.Builder, T> setParentEventId) {
+        String parentId = getParentEventID(metaData);
+        if (parentId != null) {
+            setParentEventId.apply(EventID.newBuilder().setId(parentId));
+        }
+    }
+
+    private static @Nullable String getParentEventID(IMetadata metadata) {
+        return contains(metadata, MetadataProperty.PARENT_EVENT_ID)
+                ? SailfishMetadataExtensions.getParentEventID(metadata).toString()
+                : null;
     }
 
     private static ConnectionID createConnectionID(String sessionAlias) {
