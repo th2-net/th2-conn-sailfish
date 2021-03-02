@@ -112,16 +112,16 @@ public class ConnectivityMessage {
                 .toString();
     }
 
-    private static <T> void fillParentEventId(IMetadata metaData, Function<EventID.Builder, T> setParentEventId) {
-        String parentId = getParentEventID(metaData);
+    private static <T> void fillParentEventId(IMetadata metaData, Function<EventID, T> setParentEventId) {
+        EventID parentId = getParentEventID(metaData);
         if (parentId != null) {
-            setParentEventId.apply(EventID.newBuilder().setId(parentId));
+            setParentEventId.apply(parentId);
         }
     }
 
-    private static @Nullable String getParentEventID(IMetadata metadata) {
+    private @Nullable static EventID getParentEventID(IMetadata metadata) {
         return contains(metadata, MetadataProperty.PARENT_EVENT_ID)
-                ? SailfishMetadataExtensions.getParentEventID(metadata).toString()
+                ? SailfishMetadataExtensions.getParentEventID(metadata)
                 : null;
     }
 
