@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,13 +52,13 @@ public class ServiceListener implements IServiceListener {
 
     private final Map<Direction, AtomicLong> directionToSequence;
     private final String sessionAlias;
-    private final Subscriber<RelatedMessagesBatch> subscriber;
+    private final Subscriber<ConnectivityMessage> subscriber;
     private final EventDispatcher eventDispatcher;
 
     public ServiceListener(
             Map<Direction, AtomicLong> directionToSequence,
             String sessionAlias,
-            Subscriber<RelatedMessagesBatch> subscriber,
+            Subscriber<ConnectivityMessage> subscriber,
             EventDispatcher eventDispatcher
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
@@ -104,22 +104,16 @@ public class ServiceListener implements IServiceListener {
         LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
         AtomicLong directionSeq = directionToSequence.get(direction);
-        RelatedMessagesBatch relatedMessagesBatch;
+        ConnectivityMessage connectivityMessage;
 
         if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
             EvolutionBatch batch = new EvolutionBatch(message);
-            List<ConnectivityMessage> relatedMessages = new ArrayList<>();
-            for (IMessage msg : batch.getBatch()) {
-                ConnectivityMessage connectivityMessage = createConnectivityMessage(msg, direction, directionSeq);
-                relatedMessages.add(connectivityMessage);
-            }
-            relatedMessagesBatch = new RelatedMessagesBatch(direction, relatedMessages);
+            connectivityMessage = createConnectivityMessage(batch.getBatch(), direction, directionSeq);
         } else {
-            ConnectivityMessage connectivityMessage = createConnectivityMessage(message, direction, directionSeq);
-            relatedMessagesBatch = new RelatedMessagesBatch(direction, List.of(connectivityMessage));
+            connectivityMessage = createConnectivityMessage(List.of(message), direction, directionSeq);
         }
 
-        subscriber.onNext(relatedMessagesBatch);
+        subscriber.onNext(connectivityMessage);
     }
 
     @Override
@@ -139,9 +133,9 @@ public class ServiceListener implements IServiceListener {
     }
 
     @NonNull
-    private ConnectivityMessage createConnectivityMessage(IMessage message, Direction direction, AtomicLong directionSeq) {
+    private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, Direction direction, AtomicLong directionSeq) {
         long sequence = directionSeq.incrementAndGet();
-        LOGGER.debug("On message: direction '{}'; sequence '{}'; message '{}'", direction, sequence, message);
-        return new ConnectivityMessage(message, sessionAlias, direction, sequence);
+        LOGGER.debug("On message: direction '{}'; sequence '{}'; messages '{}'", direction, sequence, messages);
+        return new ConnectivityMessage(messages, sessionAlias, direction, sequence);
     }
 }

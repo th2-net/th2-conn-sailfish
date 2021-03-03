@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.common.services.ServiceName;
 import com.exactpro.sf.comparison.conversion.ConversionException;
 import com.exactpro.sf.comparison.conversion.MultiConverter;
@@ -120,7 +121,7 @@ public class MicroserviceMain {
                 PIPELINE_SCHEDULER.shutdown();
             });
 
-            FlowableProcessor<RelatedMessagesBatch> processor = UnicastProcessor.create();
+            FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
             disposer.register(() -> {
                 LOGGER.info("Complite pipeline publisher");
                 processor.onComplete();
@@ -196,19 +197,19 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<Flowable<RelatedMessagesBatch>> createPipeline(
-            Flowable<RelatedMessagesBatch> flowable, Action terminateFlowable,
+    private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(
+            Flowable<ConnectivityMessage> flowable, Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
             MessageRouter<RawMessageBatch> rawMessageRouter
     ) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
         return flowable.observeOn(PIPELINE_SCHEDULER)
-                .doOnNext(relatedMessages -> LOGGER.debug("Start handling message batch with messages {}", relatedMessages.getMessages()))
-                .groupBy(RelatedMessagesBatch::getDirection)
+                .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
+                .groupBy(ConnectivityMessage::getDirection)
                 .map(group -> {
                     @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
-                    Flowable<RelatedMessagesBatch> messageConnectable = group
+                    Flowable<ConnectivityMessage> messageConnectable = group
                             .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
                             .publish()
                             .refCount(direction == Direction.SECOND ? 2 : 1);
@@ -222,36 +223,46 @@ public class MicroserviceMain {
                 });
     }
 
-    private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, Flowable<RelatedMessagesBatch> messageConnectable) {
+    private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, Flowable<ConnectivityMessage> messageConnectable) {
         //noinspection ResultOfMethodCallIgnored
         messageConnectable
-                .subscribe(relatedMessages -> {
-                    for (ConnectivityMessage message : relatedMessages.getMessages()) {
-                        if (!contains(message.getSailfishMessage().getMetaData(), PARENT_EVENT_ID)) {
+                .subscribe(connectivityMessage -> {
+                    // There should be only a single message
+                    // because we are subscribed on a SECOND direction.
+                    // Sailfish does not support sending multiple messages at once.
+                    // So we should send only a single event here.
+                    // But just in case we are wrong we add checking for sending multiple events
+                    boolean sent = false;
+                    for (IMessage message : connectivityMessage.getSailfishMessages()) {
+                        if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
                             continue;
                         }
+                        if (sent) {
+                            LOGGER.warn("The connectivity message has more than one sailfish message with parent event ID: {}", connectivityMessage);
+                        }
                         Event event = Event.start().endTimestamp()
-                                .name("Send '" + message.getSailfishMessage().getName() + "' message")
+                                .name("Send '" + message.getName() + "' message")
                                 .type("Send message")
-                                .messageID(message.getMessageID());
-                        LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), message.getSequence());
-                        storeEvent(eventBatchRouter, event, getParentEventID(message.getSailfishMessage().getMetaData()).getId());
+                                .messageID(connectivityMessage.getMessageID());
+                        LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
+                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
+                        sent = true;
                     }
                 });
     }
 
-    private static void createPackAndPublishPipeline(Direction direction, Flowable<RelatedMessagesBatch> messageConnectable,
+    private static void createPackAndPublishPipeline(Direction direction, Flowable<ConnectivityMessage> messageConnectable,
                                                      MessageRouter<RawMessageBatch> rawMessageRouter) {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
                 .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, MAX_MESSAGES_COUNT)
-                .concatMapSingle(flowable -> flowable.flatMapIterable(RelatedMessagesBatch::getMessages).toList())
+                .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
                 .map(ConnectivityBatch::new)
                 .doOnNext(batch -> {
                     if (LOGGER.isDebugEnabled()) {
-                        LOGGER.debug("Batch {}:{} is created", batch.getSequence(), batch.getMessages().stream()
+                        LOGGER.debug("Batch {} is created", batch.getMessages().stream()
                                 .map(ConnectivityMessage::getSequence)
                                 .collect(Collectors.toList()));
                     }
@@ -260,8 +271,18 @@ public class MicroserviceMain {
                 .refCount(1);
 
         batchConnectable
-                .map(ConnectivityBatch::convertToProtoRawBatch)
-                .subscribe(it -> rawMessageRouter.sendAll(it, (direction == Direction.FIRST ? QueueAttribute.FIRST : QueueAttribute.SECOND).toString()));
+                .subscribe(batch -> {
+                    try {
+                        RawMessageBatch rawBatch = batch.convertToProtoRawBatch();
+                        rawMessageRouter.sendAll(rawBatch, (direction == Direction.FIRST ? QueueAttribute.FIRST : QueueAttribute.SECOND).toString());
+                    } catch (Exception e) {
+                        if (LOGGER.isErrorEnabled()) {
+                            LOGGER.error("Cannot send batch with sequences: {}",
+                                    batch.getMessages().stream().map(ConnectivityMessage::getSequence).collect(Collectors.toList()),
+                                    e);
+                        }
+                    }
+                });
         LOGGER.info("Subscribed to transfer raw batch group {}", direction);
 
         LOGGER.info("Connected to publish batches group {}", direction);

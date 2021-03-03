@@ -93,7 +93,11 @@ dependencies {
 
     implementation "com.exactpro.sf:sailfish-core:${sailfishVersion}"
 
-    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 application {

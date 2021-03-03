@@ -24,8 +24,8 @@ import com.exactpro.th2.conn.configuration.ConnectivityConfiguration
 import com.exactpro.th2.common.schema.dictionary.DictionaryType.LEVEL1
 import com.exactpro.th2.common.schema.dictionary.DictionaryType.MAIN
 import com.exactpro.th2.common.schema.factory.CommonFactory
-import org.junit.Assert
-import org.junit.Test
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito.`when`
 import org.mockito.Mockito.any
 import org.mockito.Mockito.eq
@@ -82,8 +82,8 @@ class TestServiceLoading {
             listener
         )
 
-        Assert.assertEquals(settings.getDictionary(SailfishDictionaryType.MAIN), mainDictionaryUri)
-        Assert.assertEquals(settings.getDictionary(SailfishDictionaryType.LEVEL1), level1DictionaryUri)
+        Assertions.assertEquals(settings.getDictionary(SailfishDictionaryType.MAIN), mainDictionaryUri)
+        Assertions.assertEquals(settings.getDictionary(SailfishDictionaryType.LEVEL1), level1DictionaryUri)
     }
 
     private class SettingsProxy(private val dictionaryTypes: Set<SailfishDictionaryType>) : ISettingsProxy {
