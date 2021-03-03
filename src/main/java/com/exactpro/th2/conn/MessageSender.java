@@ -19,11 +19,13 @@ import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
 import java.util.Base64;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.exactpro.sf.common.messages.IMetadata;
+import com.exactpro.sf.common.messages.MetadataExtensions;
 import com.exactpro.sf.common.messages.impl.Metadata;
 import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.th2.common.event.Event;
@@ -126,11 +128,16 @@ public class MessageSender {
     }
 
     private IMetadata toSailfishMetadata(RawMessage protoMsg) {
-        if (!protoMsg.hasParentEventId()) {
-            return IMetadata.EMPTY;
-        }
         IMetadata metadata = new Metadata();
-        SailfishMetadataExtensions.setParentEventID(metadata, protoMsg.getParentEventId());
+
+        if (protoMsg.hasParentEventId()) {
+            SailfishMetadataExtensions.setParentEventID(metadata, protoMsg.getParentEventId());
+        }
+
+        Map<String, String> propertiesMap = protoMsg.getMetadata().getPropertiesMap();
+        if (!propertiesMap.isEmpty()) {
+            MetadataExtensions.setMessageProperties(metadata, propertiesMap);
+        }
         return metadata;
     }
 }

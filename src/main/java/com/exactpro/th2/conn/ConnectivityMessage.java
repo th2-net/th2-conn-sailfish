@@ -74,6 +74,10 @@ public class ConnectivityMessage {
 
         RawMessageMetadata.Builder rawMessageMetadata = createRawMessageMetadataBuilder(messageID, timestamp);
         int totalSize = calculateTotalBodySize(sailfishMessages);
+        if (totalSize == 0) {
+            throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
+        }
+
         byte[] bodyData = new byte[totalSize];
         int index = 0;
         for (IMessage message : sailfishMessages) {
@@ -89,14 +93,12 @@ public class ConnectivityMessage {
             rawMessageMetadata.putAllProperties(defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap()));
 
             byte[] rawMessage = MetadataExtensions.getRawMessage(sfMetadata);
-            if (rawMessage != null) {
-                System.arraycopy(rawMessage, 0, bodyData, index, rawMessage.length);
-                index += rawMessage.length;
+            if (rawMessage == null) {
+                LOGGER.warn("The message has empty raw data {}: {}", message.getName(), message);
+                continue;
             }
-        }
-
-        if (bodyData.length == 0) {
-            throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
+            System.arraycopy(rawMessage, 0, bodyData, index, rawMessage.length);
+            index += rawMessage.length;
         }
 
         return builder.setMetadata(rawMessageMetadata)
