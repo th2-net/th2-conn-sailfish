@@ -112,4 +112,6 @@ spec:
 
 ### 3.3.0
 + Copies the parent event ID from the original raw message to the actual one;
-+ Joins all related `IMessage`s to a single raw message
++ Joins all related `IMessage`s to a single raw message;
++ Messages that were sent using this connectivity but did not have any parent event ID
+  are attached to the dedicated event for this connectivity.

@@ -61,6 +61,7 @@ import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
+import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
@@ -150,6 +151,12 @@ public class MicroserviceMain {
                     .type("ConnectivityServiceEvents");
             storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
 
+            var untrackedSentMessages = Event.start().endTimestamp()
+                    .name("UntrackedMessages")
+                    .description("Contains messages that we send via this connectivity but does not have attacked parent event ID")
+                    .type("ConnectivityUntrackedMessages");
+            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
+
             var eventDispatcher = EventDispatcher.createDispatcher(eventBatchRouter, rootEventID, Map.of(
                     EventType.ERROR, errorEventsRoot.getId(),
                     EventType.SERVICE_EVENT, serviceEventsRoot.getId()
@@ -165,7 +172,9 @@ public class MicroserviceMain {
 
             MessageRouter<RawMessageBatch> rawMessageRouter = factory.getMessageRouterRawBatch();
 
-            MessageSender messageSender = new MessageSender(serviceProxy, rawMessageRouter, eventDispatcher);
+            MessageSender messageSender = new MessageSender(serviceProxy, rawMessageRouter, eventDispatcher,
+                    EventID.newBuilder().setId(untrackedSentMessages.getId()).build()
+            );
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();

@@ -49,14 +49,17 @@ public class MessageSender {
     private final IServiceProxy serviceProxy;
     private final MessageRouter<RawMessageBatch> router;
     private final EventDispatcher eventDispatcher;
+    private final EventID untrackedMessagesRoot;
     private volatile SubscriberMonitor subscriberMonitor;
 
     public MessageSender(IServiceProxy serviceProxy,
                          MessageRouter<RawMessageBatch> router,
-                         EventDispatcher eventDispatcher) {
+                         EventDispatcher eventDispatcher,
+                         EventID untrackedMessagesRoot) {
         this.serviceProxy = requireNonNull(serviceProxy, "Service proxy can't be null");
         this.router = requireNonNull(router, "Message router can't be null");
-        this.eventDispatcher = requireNonNull(eventDispatcher, "'Event dispatcher' parameter");
+        this.eventDispatcher = requireNonNull(eventDispatcher, "'Event dispatcher' can't be null");
+        this.untrackedMessagesRoot = requireNonNull(untrackedMessagesRoot, "'untrackedMessagesRoot' can't be null");
     }
 
     public void start() {
@@ -83,11 +86,7 @@ public class MessageSender {
     private void handle(String consumerTag, RawMessageBatch messageBatch) {
         for (RawMessage protoMessage : messageBatch.getMessagesList()) {
             try {
-                byte[] data = protoMessage.getBody().toByteArray();
-                sendMessage(data, protoMessage);
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
-                }
+                sendMessage(protoMessage);
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", consumerTag, e);
             } catch (RuntimeException e) {
@@ -96,9 +95,13 @@ public class MessageSender {
         }
     }
 
-    private void sendMessage(byte[] data, RawMessage protoMsg) throws InterruptedException {
+    private void sendMessage(RawMessage protoMsg) throws InterruptedException {
+        byte[] data = protoMsg.getBody().toByteArray();
         try {
             serviceProxy.sendRaw(data, toSailfishMetadata(protoMsg));
+            if (logger.isDebugEnabled()) {
+                logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
+            }
         } catch (Exception ex) {
             Event errorEvent = createErrorEvent("SendError")
                     .bodyData(EventUtils.createMessageBean("Cannot send message. Message body in base64:"))
@@ -130,9 +133,10 @@ public class MessageSender {
     private IMetadata toSailfishMetadata(RawMessage protoMsg) {
         IMetadata metadata = new Metadata();
 
-        if (protoMsg.hasParentEventId()) {
-            SailfishMetadataExtensions.setParentEventID(metadata, protoMsg.getParentEventId());
-        }
+        SailfishMetadataExtensions.setParentEventID(metadata, protoMsg.hasParentEventId()
+                ? protoMsg.getParentEventId()
+                : untrackedMessagesRoot
+        );
 
         Map<String, String> propertiesMap = protoMsg.getMetadata().getPropertiesMap();
         if (!propertiesMap.isEmpty()) {
