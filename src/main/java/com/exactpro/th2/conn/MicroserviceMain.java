@@ -15,8 +15,6 @@
  */
 package com.exactpro.th2.conn;
 
-import static com.exactpro.sf.externalapi.DictionaryType.MAIN;
-import static com.exactpro.sf.externalapi.DictionaryType.OUTGOING;
 import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
 import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
@@ -45,7 +43,6 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.exactpro.sf.common.messages.structures.IDictionaryStructure;
 import com.exactpro.sf.common.services.ServiceName;
 import com.exactpro.sf.comparison.conversion.ConversionException;
 import com.exactpro.sf.comparison.conversion.MultiConverter;
@@ -54,7 +51,6 @@ import com.exactpro.sf.configuration.suri.SailfishURIException;
 import com.exactpro.sf.configuration.suri.SailfishURIUtils;
 import com.exactpro.sf.configuration.workspace.WorkspaceSecurityException;
 import com.exactpro.sf.externalapi.DictionaryType;
-import com.exactpro.sf.externalapi.IMessageFactoryProxy;
 import com.exactpro.sf.externalapi.IServiceFactory;
 import com.exactpro.sf.externalapi.IServiceListener;
 import com.exactpro.sf.externalapi.IServiceProxy;
@@ -71,7 +67,6 @@ import com.exactpro.th2.common.schema.message.QueueAttribute;
 import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventType;
-import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import io.reactivex.rxjava3.annotations.NonNull;
@@ -159,7 +154,7 @@ public class MicroserviceMain {
                     EventType.SERVICE_EVENT, serviceEventsRoot.getId()
             ));
 
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, new IMessageToProtoConverter(), configuration.getSessionAlias(), processor, eventDispatcher);
+            IServiceListener serviceListener = new ServiceListener(directionToSequence, configuration.getSessionAlias(), processor, eventDispatcher);
             IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             disposer.register(() -> {
                 LOGGER.info("Stop service proxy");

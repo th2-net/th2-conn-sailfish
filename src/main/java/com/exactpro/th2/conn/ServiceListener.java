@@ -29,7 +29,6 @@ import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.common.grpc.Direction;
-import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 
 import static com.exactpro.th2.common.grpc.Direction.FIRST;
 import static com.exactpro.th2.common.grpc.Direction.SECOND;
@@ -52,20 +51,17 @@ public class ServiceListener implements IServiceListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceListener.class);
 
     private final Map<Direction, AtomicLong> directionToSequence;
-    private final IMessageToProtoConverter converter;
     private final String sessionAlias;
     private final Subscriber<RelatedMessagesBatch> subscriber;
     private final EventDispatcher eventDispatcher;
 
     public ServiceListener(
             Map<Direction, AtomicLong> directionToSequence,
-            IMessageToProtoConverter converter,
             String sessionAlias,
             Subscriber<RelatedMessagesBatch> subscriber,
             EventDispatcher eventDispatcher
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
-        this.converter = requireNonNull(converter, "Converter can't be null");
         this.sessionAlias = requireNonNull(sessionAlias, "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
@@ -146,6 +142,6 @@ public class ServiceListener implements IServiceListener {
     private ConnectivityMessage createConnectivityMessage(IMessage message, Direction direction, AtomicLong directionSeq) {
         long sequence = directionSeq.incrementAndGet();
         LOGGER.debug("On message: direction '{}'; sequence '{}'; message '{}'", direction, sequence, message);
-        return new ConnectivityMessage(converter, message, sessionAlias, direction, sequence);
+        return new ConnectivityMessage(message, sessionAlias, direction, sequence);
     }
 }

@@ -23,6 +23,8 @@ import java.util.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.exactpro.sf.common.messages.IMetadata;
+import com.exactpro.sf.common.messages.impl.Metadata;
 import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
@@ -30,11 +32,13 @@ import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
+import com.exactpro.th2.common.grpc.RawMessageMetadata;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
+import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 
 import io.reactivex.rxjava3.annotations.Nullable;
 
@@ -79,7 +83,7 @@ public class MessageSender {
         for (RawMessage protoMessage : messageBatch.getMessagesList()) {
             try {
                 byte[] data = protoMessage.getBody().toByteArray();
-                sendMessage(data, protoMessage.hasParentEventId() ? protoMessage.getParentEventId() : null);
+                sendMessage(data, protoMessage);
                 if (logger.isDebugEnabled()) {
                     logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
                 }
@@ -91,15 +95,15 @@ public class MessageSender {
         }
     }
 
-    private void sendMessage(byte[] data, @Nullable EventID parentId) throws InterruptedException {
+    private void sendMessage(byte[] data, RawMessage protoMsg) throws InterruptedException {
         try {
-            serviceProxy.sendRaw(data);
+            serviceProxy.sendRaw(data, toSailfishMetadata(protoMsg));
         } catch (Exception ex) {
             Event errorEvent = createErrorEvent("SendError")
                     .bodyData(EventUtils.createMessageBean("Cannot send message. Message body in base64:"))
                     .bodyData(EventUtils.createMessageBean(Base64.getEncoder().encodeToString(data)));
             EventStoreExtensions.addException(errorEvent, ex);
-            storeErrorEvent(errorEvent, parentId);
+            storeErrorEvent(errorEvent, protoMsg.hasParentEventId() ? protoMsg.getParentEventId() : null);
             throw ex;
         }
     }
@@ -122,4 +126,12 @@ public class MessageSender {
                 .type(eventType);
     }
 
+    private IMetadata toSailfishMetadata(RawMessage protoMsg) {
+        if (!protoMsg.hasParentEventId()) {
+            return IMetadata.EMPTY;
+        }
+        IMetadata metadata = new Metadata();
+        SailfishMetadataExtensions.setParentEventID(metadata, protoMsg.getParentEventId());
+        return metadata;
+    }
 }

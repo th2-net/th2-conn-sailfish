@@ -22,20 +22,21 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 import java.util.Collections;
 
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 
 import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
+import com.exactpro.sf.common.messages.MsgMetaData;
 import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
-import com.exactpro.th2.common.grpc.Message;
 import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.grpc.MessageMetadata;
 import com.exactpro.th2.common.grpc.RawMessage;
+import com.exactpro.th2.common.grpc.RawMessage.Builder;
 import com.exactpro.th2.common.grpc.RawMessageMetadata;
-import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
+import com.exactpro.th2.conn.utility.MetadataProperty;
+import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
 
@@ -45,14 +46,11 @@ public class ConnectivityMessage {
 
     private final IMessage sailfishMessage;
 
-    private final IMessageToProtoConverter converter;
-
     // This variables can be calculated in methods
     private final MessageID messageID;
     private final Timestamp timestamp;
 
-    public ConnectivityMessage(IMessageToProtoConverter converter, IMessage sailfishMessage, String sessionAlias, Direction direction, long sequence) {
-        this.converter = requireNonNull(converter, "Converter can't be null");
+    public ConnectivityMessage(IMessage sailfishMessage, String sessionAlias, Direction direction, long sequence) {
         this.sailfishMessage = requireNonNull(sailfishMessage, "Message can't be null");
         messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null")),
                 requireNonNull(direction, "Direction can't be null"), sequence);
@@ -64,15 +62,13 @@ public class ConnectivityMessage {
     }
 
     public RawMessage convertToProtoRawMessage() {
-        return RawMessage.newBuilder()
-                        .setMetadata(createRawMessageMetadata(messageID, timestamp, sailfishMessage.getMetaData()))
-                        .setBody(ByteString.copyFrom(sailfishMessage.getMetaData().getRawMessage()))
-                        .build();
-    }
-
-    public Message convertToProtoParsedMessage() {
-        return converter.toProtoMessage(sailfishMessage)
-                        .setMetadata(createMessageMetadata(messageID, sailfishMessage.getName(), timestamp, sailfishMessage.getMetaData()))
+        Builder builder = RawMessage.newBuilder();
+        IMetadata sfMetadata = sailfishMessage.getMetaData();
+        if (SailfishMetadataExtensions.contains(sfMetadata, MetadataProperty.PARENT_EVENT_ID)) {
+            builder.setParentEventId(SailfishMetadataExtensions.getParentEventID(sfMetadata));
+        }
+        return builder.setMetadata(createRawMessageMetadata(messageID, timestamp, sfMetadata))
+                        .setBody(ByteString.copyFrom(MetadataExtensions.getRawMessage(sfMetadata)))
                         .build();
     }
 
@@ -111,15 +107,6 @@ public class ConnectivityMessage {
                 .setConnectionId(connectionId)
                 .setDirection(direction)
                 .setSequence(sequence)
-                .build();
-    }
-
-    private static MessageMetadata createMessageMetadata(MessageID messageID, String messageName, Timestamp timestamp, IMetadata metadata) {
-        return MessageMetadata.newBuilder()
-                .setId(messageID)
-                .setTimestamp(timestamp)
-                .setMessageType(messageName)
-                .putAllProperties(defaultIfNull(getMessageProperties(metadata), Collections.emptyMap()))
                 .build();
     }
 
