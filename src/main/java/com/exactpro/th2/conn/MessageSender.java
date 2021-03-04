@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,14 @@ import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
 import java.util.Base64;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.exactpro.sf.common.messages.IMetadata;
+import com.exactpro.sf.common.messages.MetadataExtensions;
+import com.exactpro.sf.common.messages.impl.Metadata;
 import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
@@ -35,6 +39,7 @@ import com.exactpro.th2.common.schema.message.SubscriberMonitor;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
+import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 
 import io.reactivex.rxjava3.annotations.Nullable;
 
@@ -44,14 +49,17 @@ public class MessageSender {
     private final IServiceProxy serviceProxy;
     private final MessageRouter<RawMessageBatch> router;
     private final EventDispatcher eventDispatcher;
+    private final EventID untrackedMessagesRoot;
     private volatile SubscriberMonitor subscriberMonitor;
 
     public MessageSender(IServiceProxy serviceProxy,
                          MessageRouter<RawMessageBatch> router,
-                         EventDispatcher eventDispatcher) {
+                         EventDispatcher eventDispatcher,
+                         EventID untrackedMessagesRoot) {
         this.serviceProxy = requireNonNull(serviceProxy, "Service proxy can't be null");
         this.router = requireNonNull(router, "Message router can't be null");
-        this.eventDispatcher = requireNonNull(eventDispatcher, "'Event dispatcher' parameter");
+        this.eventDispatcher = requireNonNull(eventDispatcher, "'Event dispatcher' can't be null");
+        this.untrackedMessagesRoot = requireNonNull(untrackedMessagesRoot, "'untrackedMessagesRoot' can't be null");
     }
 
     public void start() {
@@ -78,11 +86,7 @@ public class MessageSender {
     private void handle(String consumerTag, RawMessageBatch messageBatch) {
         for (RawMessage protoMessage : messageBatch.getMessagesList()) {
             try {
-                byte[] data = protoMessage.getBody().toByteArray();
-                sendMessage(data, protoMessage.hasParentEventId() ? protoMessage.getParentEventId() : null);
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
-                }
+                sendMessage(protoMessage);
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", consumerTag, e);
             } catch (RuntimeException e) {
@@ -91,15 +95,19 @@ public class MessageSender {
         }
     }
 
-    private void sendMessage(byte[] data, @Nullable EventID parentId) throws InterruptedException {
+    private void sendMessage(RawMessage protoMsg) throws InterruptedException {
+        byte[] data = protoMsg.getBody().toByteArray();
         try {
-            serviceProxy.sendRaw(data);
+            serviceProxy.sendRaw(data, toSailfishMetadata(protoMsg));
+            if (logger.isDebugEnabled()) {
+                logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
+            }
         } catch (Exception ex) {
             Event errorEvent = createErrorEvent("SendError")
                     .bodyData(EventUtils.createMessageBean("Cannot send message. Message body in base64:"))
                     .bodyData(EventUtils.createMessageBean(Base64.getEncoder().encodeToString(data)));
             EventStoreExtensions.addException(errorEvent, ex);
-            storeErrorEvent(errorEvent, parentId);
+            storeErrorEvent(errorEvent, protoMsg.hasParentEventId() ? protoMsg.getParentEventId() : null);
             throw ex;
         }
     }
@@ -122,4 +130,18 @@ public class MessageSender {
                 .type(eventType);
     }
 
+    private IMetadata toSailfishMetadata(RawMessage protoMsg) {
+        IMetadata metadata = new Metadata();
+
+        SailfishMetadataExtensions.setParentEventID(metadata, protoMsg.hasParentEventId()
+                ? protoMsg.getParentEventId()
+                : untrackedMessagesRoot
+        );
+
+        Map<String, String> propertiesMap = protoMsg.getMetadata().getPropertiesMap();
+        if (!propertiesMap.isEmpty()) {
+            MetadataExtensions.setMessageProperties(metadata, propertiesMap);
+        }
+        return metadata;
+    }
 }

@@ -57,14 +57,6 @@ public class ConnectivityBatch {
                 .build();
     }
 
-    public MessageBatch convertToProtoParsedBatch() {
-        return MessageBatch.newBuilder()
-                .addAllMessages(connectivityMessages.stream()
-                        .map(ConnectivityMessage::convertToProtoParsedMessage)
-                        .collect(Collectors.toList()))
-                .build();
-    }
-
     public String getSessionAlias() {
         return sessionAlias;
     }
