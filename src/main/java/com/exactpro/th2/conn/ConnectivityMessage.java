@@ -104,6 +104,11 @@ public class ConnectivityMessage {
         return sailfishMessage;
     }
 
+    @Nullable
+    public EventID getParentId() {
+        return getParentEventID(sailfishMessage.getMetaData());
+    }
+
     @Override
     public String toString() {
         return new ToStringBuilder(this)
@@ -119,7 +124,8 @@ public class ConnectivityMessage {
         }
     }
 
-    private @Nullable static EventID getParentEventID(IMetadata metadata) {
+    @Nullable
+    private static EventID getParentEventID(IMetadata metadata) {
         return contains(metadata, MetadataProperty.PARENT_EVENT_ID)
                 ? SailfishMetadataExtensions.getParentEventID(metadata)
                 : null;

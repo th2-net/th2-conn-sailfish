@@ -17,6 +17,7 @@ package com.exactpro.th2.conn;
 
 import static com.exactpro.sf.externalapi.DictionaryType.MAIN;
 import static com.exactpro.sf.externalapi.DictionaryType.OUTGOING;
+import static com.exactpro.th2.conn.utility.EventStoreExtensions.addException;
 import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
 import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
@@ -32,7 +33,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -62,18 +65,24 @@ import com.exactpro.sf.externalapi.ISettingsProxy;
 import com.exactpro.sf.externalapi.ServiceFactory;
 import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.event.Event.Status;
+import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
+import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageBatch;
+import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
 import com.exactpro.th2.conn.events.EventDispatcher;
+import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.events.EventType;
 import com.exactpro.th2.sailfish.utils.IMessageToProtoConverter;
 import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.protobuf.TextFormat;
 
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
@@ -180,7 +189,7 @@ public class MicroserviceMain {
                 messageSender.stop();
             });
 
-            createPipeline(processor, processor::onComplete, eventBatchRouter, parsedMessageBatch, factory.getMessageRouterRawBatch())
+            createPipeline(processor, processor::onComplete, eventDispatcher, parsedMessageBatch, factory.getMessageRouterRawBatch())
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
@@ -208,7 +217,7 @@ public class MicroserviceMain {
 
     private static @NonNull Flowable<Flowable<RelatedMessagesBatch>> createPipeline(
             Flowable<RelatedMessagesBatch> flowable, Action terminateFlowable,
-            MessageRouter<EventBatch> eventBatchRouter,
+            EventDispatcher eventDispatcher,
             MessageRouter<MessageBatch> parsedMessageRouter,
             MessageRouter<RawMessageBatch> rawMessageRouter
     ) {
@@ -225,15 +234,15 @@ public class MicroserviceMain {
                             .refCount(direction == Direction.SECOND ? 2 : 1);
 
                     if (direction == Direction.SECOND) {
-                        subscribeToSendMessage(eventBatchRouter, messageConnectable);
+                        subscribeToSendMessage(eventDispatcher, messageConnectable);
                     }
-                    createPackAndPublishPipeline(direction, messageConnectable, parsedMessageRouter, rawMessageRouter);
+                    createPackAndPublishPipeline(direction, messageConnectable, parsedMessageRouter, rawMessageRouter, eventDispatcher);
 
                     return messageConnectable;
                 });
     }
 
-    private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, Flowable<RelatedMessagesBatch> messageConnectable) {
+    private static void subscribeToSendMessage(EventDispatcher eventBatchRouter, Flowable<RelatedMessagesBatch> messageConnectable) {
         //noinspection ResultOfMethodCallIgnored
         messageConnectable
                 .subscribe(relatedMessages -> {
@@ -246,13 +255,14 @@ public class MicroserviceMain {
                                 .type("Send message")
                                 .messageID(message.getMessageID());
                         LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), message.getSequence());
-                        storeEvent(eventBatchRouter, event, getParentEventID(message.getSailfishMessage().getMetaData()).getId());
+                        safeStore(eventBatchRouter, event, getParentEventID(message.getSailfishMessage().getMetaData()).getId());
                     }
                 });
     }
 
     private static void createPackAndPublishPipeline(Direction direction, Flowable<RelatedMessagesBatch> messageConnectable,
-                                                     MessageRouter<MessageBatch> parsedMessageRouter, MessageRouter<RawMessageBatch> rawMessageRouter) {
+                                                     MessageRouter<MessageBatch> parsedMessageRouter, MessageRouter<RawMessageBatch> rawMessageRouter,
+                                                     EventDispatcher eventDispatcher) {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
@@ -270,17 +280,120 @@ public class MicroserviceMain {
                 .publish()
                 .refCount(2);
 
-        batchConnectable
-                .map(ConnectivityBatch::convertToProtoRawBatch)
-                .subscribe(it -> rawMessageRouter.send(it, direction == Direction.FIRST ? "first" : "second", "publish", "raw"));
+        batchConnectable.subscribeWith(new PublishSubscriber<>(
+                rawMessageRouter,
+                ConnectivityBatch::convertToProtoRawBatch,
+                eventDispatcher,
+                direction == Direction.FIRST ? "first" : "second", "publish", "raw"
+        ));
         LOGGER.info("Subscribed to transfer raw batch group {}", direction);
 
-        batchConnectable
-                .map(ConnectivityBatch::convertToProtoParsedBatch)
-                .subscribe(it -> parsedMessageRouter.send(it, direction == Direction.FIRST ? "first" : "second", "publish", "parsed"));
+        batchConnectable.subscribeWith(new PublishSubscriber<>(
+                parsedMessageRouter,
+                ConnectivityBatch::convertToProtoParsedBatch,
+                eventDispatcher,
+                direction == Direction.FIRST ? "first" : "second", "publish", "parsed"
+        ));
         LOGGER.info("Subscribed to transfer parsed batch group {}", direction);
 
         LOGGER.info("Connected to publish batches group {}", direction);
+    }
+
+    private static class PublishSubscriber<T> extends DisposableSubscriber<ConnectivityBatch> {
+        private final Function<ConnectivityBatch, T> transformer;
+        private final MessageRouter<T> router;
+        private final EventDispatcher eventDispatcher;
+        private final String[] attributes;
+
+        private PublishSubscriber(
+                MessageRouter<T> router,
+                Function<ConnectivityBatch, T> transformer,
+                EventDispatcher eventDispatcher,
+                String... attributes
+        ) {
+            this.router = requireNonNull(router, "'Router' parameter");
+            this.transformer = requireNonNull(transformer, "'Transformer' parameter");
+            this.eventDispatcher = requireNonNull(eventDispatcher, "'Event Dispatcher' parameter");
+            this.attributes = requireNonNull(attributes, "'Attributes' parameter");
+        }
+
+        @Override
+        public void onNext(ConnectivityBatch connectivityBatch) {
+            try {
+                T toPublish = transformer.apply(connectivityBatch);
+                router.send(toPublish, attributes);
+            } catch (Exception ex) {
+                List<MessageID> messageIDs = connectivityBatch.getMessages().stream().map(ConnectivityMessage::getMessageID).collect(Collectors.toList());
+                String messageIDsAsString = messageIDs.stream().map(TextFormat::shortDebugString).collect(Collectors.joining(", "));
+                LOGGER.error("Cannot send batch with seq {}", messageIDsAsString, ex);
+                publishErrorToConnEvent(ex, messageIDs, messageIDsAsString);
+
+                for (ConnectivityMessage message : connectivityBatch.getMessages()) {
+                    EventID parentId = message.getParentId();
+                    if (parentId != null) {
+                        publishErrorToParentEvent(ex, parentId, message);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            if (LOGGER.isErrorEnabled()) {
+                LOGGER.error("Unexpected error for publisher with attributes: {}", Arrays.toString(attributes), t);
+            }
+            Event error = Event.start().endTimestamp()
+                    .name("Unexpected error for " + Arrays.toString(attributes))
+                    .type("UnexpectedPublishingError")
+                    .status(Status.FAILED)
+                    .bodyData(EventUtils.createMessageBean("Caught unexpected publishing error"));
+            addException(error, t);
+            safeStore(eventDispatcher, EventHolder.createError(error));
+        }
+
+        @Override
+        public void onComplete() {
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info("Publishing with attributes {} completed", Arrays.toString(attributes));
+            }
+        }
+
+        private void publishErrorToParentEvent(Throwable ex, EventID parentId, ConnectivityMessage message) {
+            Event error = Event.start().endTimestamp()
+                    .name("Message publishing error")
+                    .type("PublishingError")
+                    .status(Status.FAILED)
+                    .bodyData(EventUtils.createMessageBean("Cannot publish message " + message.getSailfishMessage().getName()));
+            addException(error, ex);
+            safeStore(eventDispatcher, error, parentId.getId());
+        }
+
+        private void publishErrorToConnEvent(Throwable ex, List<MessageID> messageIDs, String messageIDsAsString) {
+            Event error = Event.start().endTimestamp()
+                    .name("Publishing to " + Arrays.toString(attributes) + " error")
+                    .type("PublishingError")
+                    .status(Status.FAILED)
+                    .bodyData(EventUtils.createMessageBean("Cannot publish messages batch with IDs: " + messageIDsAsString));
+            messageIDs.forEach(error::messageID);/* probably will cause error in the rpt provider */
+            addException(error, ex);
+            safeStore(eventDispatcher, EventHolder.createError(error));
+        }
+    }
+
+    private static void safeStore(EventDispatcher dispatcher, EventHolder holder) {
+        try {
+            dispatcher.store(holder);
+        } catch (Exception ex) {
+            LOGGER.error("Cannot store event {} with type {}", holder.getEvent().getId(), holder.getType(), ex);
+        }
+    }
+
+    private static void safeStore(EventDispatcher dispatcher, Event event, String parentId) {
+        try {
+            dispatcher.store(event, parentId);
+        } catch (Exception ex) {
+            LOGGER.error("Cannot store event {} with parent ID {}", event.getId(), parentId, ex);
+        }
     }
 
     private interface Disposable {
