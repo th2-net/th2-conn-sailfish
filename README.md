@@ -1,4 +1,4 @@
-# Connect (3.3.0)
+# Connect (3.3.1)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -110,7 +110,12 @@ spec:
 
 ## Release notes
 
+### 3.3.1
+
++ Support for sending raw messages via Netty services
+
 ### 3.3.0
+
 + Copies the parent event ID from the original raw message to the actual one;
 + Joins all related `IMessage`s to a single raw message;
 + Messages that were sent using this connectivity but did not have any parent event ID
