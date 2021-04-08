@@ -1,4 +1,4 @@
-# Connect
+# Connect (2.6.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -114,3 +114,6 @@ spec:
       connection-type: mq
       attributes: ["send", "parsed", "subscribe"]
 ```
+
++ 2.6.0
+    + Validates configured dictionaries during initialization
