@@ -1,4 +1,4 @@
-# Connect (2.6.0)
+# Connect (2.6.1)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -114,6 +114,13 @@ spec:
       connection-type: mq
       attributes: ["send", "parsed", "subscribe"]
 ```
+
+## Changes
+
++ 2.6.1
+    + Use `sailfish-utils` with corrected logging output
+    + Netty:
+        + Fix incorrect timeout information in `SendMessageFailedException`
 
 + 2.6.0
     + Validates configured dictionaries during initialization
