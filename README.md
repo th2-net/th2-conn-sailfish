@@ -110,6 +110,10 @@ spec:
 
 ## Release notes
 
+### 3.5.0
+
++ Fixed GrpcRouterConfiguration configuration reading
+
 ### 3.4.1
 
 + Netty:
