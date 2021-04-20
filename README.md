@@ -1,4 +1,4 @@
-# Connect (3.4.1)
+# Connect (3.5.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -109,6 +109,13 @@ spec:
 ```
 
 ## Release notes
+
+### 3.5.0
+
++ reads dictionaries from the /var/th2/config/dictionary folder.
++ uses mq_router, grpc_router, cradle_manager optional JSON configs from the /var/th2/config folder
++ tries to load log4j.properties files from sources in order: '/var/th2/config', '/home/etc', configured path via cmd, default configuration
++ update Cradle version. Introduce async API for storing events
 
 ### 3.4.1
 
