@@ -30,6 +30,7 @@ import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
 import com.exactpro.th2.common.event.EventUtils;
+import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.Message;
 import com.exactpro.th2.common.grpc.MessageBatch;
 import com.exactpro.th2.common.schema.message.MessageRouter;
@@ -41,6 +42,7 @@ import com.exactpro.th2.conn.utility.MetadataProperty;
 import com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter;
 
 import io.reactivex.rxjava3.annotations.NonNull;
+import io.reactivex.rxjava3.annotations.Nullable;
 
 public class MessageSender {
     private final Logger logger = LoggerFactory.getLogger(getClass().getName() + "@" + hashCode());
@@ -106,12 +108,13 @@ public class MessageSender {
             return message;
         } catch (Exception ex) {
             Event errorEvent = createErrorEvent("ConversionError")
+                    .name("Cannot convert message '" + protoMessage.getMetadata().getMessageType() + "'")
                     .bodyData(EventUtils.createMessageBean("Cannot convert proto Message to IMessage."))
                     .bodyData(EventUtils.createMessageBean("Protobuf message:"))
                     .bodyData(EventStoreExtensions.createProtoMessageBean(protoMessage));
             EventStoreExtensions.addException(errorEvent, ex);
-            String parentId = protoMessage.hasParentEventId()
-                    ? protoMessage.getParentEventId().getId()
+            EventID parentId = protoMessage.hasParentEventId()
+                    ? protoMessage.getParentEventId()
                     : null;
             storeErrorEvent(errorEvent, parentId);
             throw ex;
@@ -123,23 +126,24 @@ public class MessageSender {
             return serviceProxy.send(message);
         } catch (Exception ex) {
             Event errorEvent = createErrorEvent("SendError")
+                    .name("Cannot send message '" + message.getName() + "'")
                     .bodyData(EventUtils.createMessageBean("Cannot send message."))
                     .bodyData(EventUtils.createMessageBean(message.toString()));
             EventStoreExtensions.addException(errorEvent, ex);
-            String parentId = contains(message.getMetaData(), MetadataProperty.PARENT_EVENT_ID)
-                    ? getParentEventID(message.getMetaData()).toString()
+            EventID parentId = contains(message.getMetaData(), MetadataProperty.PARENT_EVENT_ID)
+                    ? getParentEventID(message.getMetaData())
                     : null;
             storeErrorEvent(errorEvent, parentId);
             throw ex;
         }
     }
 
-    private void storeErrorEvent(Event errorEvent, String parentId) {
+    private void storeErrorEvent(Event errorEvent, @Nullable EventID parentId) {
         try {
             if (parentId == null) {
                 eventDispatcher.store(EventHolder.createError(errorEvent));
             } else {
-                eventDispatcher.store(errorEvent, parentId);
+                eventDispatcher.store(errorEvent, parentId.getId());
             }
         } catch (IOException e) {
             logger.error("Cannot store event {} (parentId: {})", errorEvent.getId(), parentId, e);

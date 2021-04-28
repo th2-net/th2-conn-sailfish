@@ -1,4 +1,4 @@
-# Connect (2.6.1)
+# Connect (2.6.2)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -116,6 +116,9 @@ spec:
 ```
 
 ## Changes
+
++ 2.6.2
+    + Fix problem with incorrect parent event ID when failed to send a message
 
 + 2.6.1
     + Use `sailfish-utils` with corrected logging output
