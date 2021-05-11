@@ -18,6 +18,10 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class ConnectivityConfiguration {
+    private boolean enableMessageSendingEvent = true;
+
+    private int maxMessageBatchSize = 100;
+
     @JsonProperty(value = "session-alias", required = true)
     private String sessionAlias;
 
@@ -32,6 +36,14 @@ public class ConnectivityConfiguration {
 
     @JsonProperty(required = true)
     private Map<String, Object> settings;
+
+    public boolean isEnableMessageSendingEvent() {
+        return enableMessageSendingEvent;
+    }
+
+    public int getMaxMessageBatchSize() {
+        return maxMessageBatchSize;
+    }
 
     public String getSessionAlias() {
         return sessionAlias;
