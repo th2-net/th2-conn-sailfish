@@ -21,9 +21,8 @@ import com.exactpro.sf.common.messages.IMessage
 import com.exactpro.th2.common.grpc.Direction
 import com.exactpro.th2.common.grpc.EventID
 import com.exactpro.th2.common.grpc.RawMessage
-import com.exactpro.th2.common.schema.message.toJson
+import com.exactpro.th2.common.message.toJson
 import com.exactpro.th2.conn.utility.parentEventID
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
