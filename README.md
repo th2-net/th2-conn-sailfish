@@ -1,4 +1,4 @@
-# Connect (3.5.1)
+# Connect (3.6.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -109,6 +109,10 @@ spec:
 ```
 
 ## Release notes
+
+### 3.6.0
+
++ resets embedded log4j configuration before configuring from a file
 
 ### 3.5.1
 
