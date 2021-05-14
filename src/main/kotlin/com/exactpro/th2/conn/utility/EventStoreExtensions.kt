@@ -60,8 +60,8 @@ fun MessageRouter<EventBatch>.storeEvents(parentEventID: String? = null, vararg 
             if (parentEventID != null) {
                 setParentEventId(EventID.newBuilder().setId(parentEventID))
             }
+            val parentId = toEventID(parentEventID)
             for (event in events) {
-                val parentId = toEventID(parentEventID)
                 addEvents(event.toProto(parentId))
             }
         }
