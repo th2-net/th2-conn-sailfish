@@ -222,7 +222,7 @@ public class MicroserviceMain {
                     Flowable<ConnectivityMessage> messageConnectable = group
                             .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
                             .publish()
-                            .refCount(direction == Direction.SECOND ? 2 : 1);
+                            .refCount(enableMessageSendingEvent && direction == Direction.SECOND ? 2 : 1);
 
                     if (enableMessageSendingEvent && direction == Direction.SECOND) {
                         subscribeToSendMessage(eventBatchRouter, messageConnectable);
