@@ -18,6 +18,7 @@ package com.exactpro.th2.conn.utility
 
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.common.event.EventUtils
+import com.exactpro.th2.common.event.EventUtils.toEventID
 import com.exactpro.th2.common.event.IBodyData
 import com.exactpro.th2.common.grpc.EventBatch
 import com.exactpro.th2.common.grpc.EventID
@@ -38,7 +39,7 @@ private val LOGGER = KotlinLogging.logger { }
 @Throws(JsonProcessingException::class)
 fun MessageRouter<EventBatch>.storeEvent(event: Event, parentEventID: String? = null) : Event {
     try {
-        send(EventBatch.newBuilder().addEvents(event.toProtoEvent(parentEventID)).build())
+        send(EventBatch.newBuilder().addEvents(event.toProto(toEventID(parentEventID))).build())
     } catch (e: Exception) {
         throw RuntimeException("Event '" + event.id + "' store failure", e)
     }
@@ -59,8 +60,9 @@ fun MessageRouter<EventBatch>.storeEvents(parentEventID: String? = null, vararg 
             if (parentEventID != null) {
                 setParentEventId(EventID.newBuilder().setId(parentEventID))
             }
+            val parentId = toEventID(parentEventID)
             for (event in events) {
-                addEvents(event.toProtoEvent(parentEventID))
+                addEvents(event.toProto(parentId))
             }
         }
         send(batchBuilder.build())
