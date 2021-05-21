@@ -1,4 +1,4 @@
-# Connect (3.6.1)
+# Connect (3.7.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -27,6 +27,13 @@ Parameters:
 + type - the service type from **services.xml** file. If service name from services.xml file contains `-` symbols they must be replaced with `_` symbol;
 + name - the service name that will be displayed in the events in the report;
 + settings - the parameters that will be transformed to the actual service's settings specified in the **services.xml** file.
++ maxMessageBatchSize - the limitation for message batch size which connect sends to first and second publish pins with. The default value is 100
++ enableMessageSendingEvent - if this option `true` connect sends separate event for every sent message which incoming from the pin with send attribute. The default value is true
+
+## Metrics
+
+Connect component produces several metrics related to its activity.
++ th2_conn_incoming_msg_quantity / th2_conn_outgoing_msg_quantity are counter type metrics which increment when message sent or received via implemented protocol.  They have the `session_alias` attribute.
 
 ## Extension
 
@@ -94,6 +101,8 @@ spec:
     workspace: "/home/sailfish/workspace"
     type: "th2_service:Your_Service_Type"
     name: "your_service"
+    maxMessageBatchSize: 100
+    enableMessageSendingEvent: true
     settings:
       param1: "value1"
   pins:
@@ -109,6 +118,12 @@ spec:
 ```
 
 ## Release notes
+
+### 3.7.0
+
++ Added maxMessageBatchSize option to configure limitation of message batch size 
++ Added enableMessageSendingEvent option to manage event emitting related to sent messages
++ Produce th2_conn_incoming_msg_quantity / th2_conn_outgoing_msg_quantity metrics
 
 ### 3.6.1
 

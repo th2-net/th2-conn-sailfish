@@ -125,7 +125,7 @@ public class ServiceListener implements IServiceListener {
     public void onMessage(IServiceProxy service, IMessage message, boolean rejected, ServiceHandlerRoute route) {
         LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
-        DIRECTION_TO_COUNTER.get(direction).inc();
+        DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
         AtomicLong directionSeq = directionToSequence.get(direction);
         ConnectivityMessage connectivityMessage;
 
