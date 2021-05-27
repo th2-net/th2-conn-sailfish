@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,6 +18,10 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class ConnectivityConfiguration {
+    private boolean enableMessageSendingEvent = true;
+
+    private int maxMessageBatchSize = 100;
+
     @JsonProperty(value = "session-alias", required = true)
     private String sessionAlias;
 
@@ -32,6 +36,14 @@ public class ConnectivityConfiguration {
 
     @JsonProperty(required = true)
     private Map<String, Object> settings;
+
+    public boolean isEnableMessageSendingEvent() {
+        return enableMessageSendingEvent;
+    }
+
+    public int getMaxMessageBatchSize() {
+        return maxMessageBatchSize;
+    }
 
     public String getSessionAlias() {
         return sessionAlias;

@@ -35,7 +35,8 @@ import static com.exactpro.th2.common.grpc.Direction.SECOND;
 import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -44,9 +45,30 @@ import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.prometheus.client.Counter;
 import io.reactivex.rxjava3.annotations.NonNull;
 
 public class ServiceListener implements IServiceListener {
+
+    private static final Map<Direction, Counter> DIRECTION_TO_COUNTER;
+
+    static {
+        Map<Direction, Counter> map = new EnumMap<>(Direction.class);
+        map.put(FIRST, Counter.build()
+                .name("th2_conn_incoming_msg_quantity")
+                // FIXME: use DEFAULT_SESSION_ALIAS_LABEL_NAME variable
+                .labelNames("session_alias")
+                .help("Quantity of incoming messages to conn")
+                .register());
+        map.put(SECOND, Counter.build()
+                .name("th2_conn_outgoing_msg_quantity")
+                // FIXME: use DEFAULT_SESSION_ALIAS_LABEL_NAME variable
+                .labelNames("session_alias")
+                .help("Quantity of outgoing messages from conn")
+                .register());
+
+        DIRECTION_TO_COUNTER = Collections.unmodifiableMap(map);
+    }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceListener.class);
 
@@ -103,6 +125,7 @@ public class ServiceListener implements IServiceListener {
     public void onMessage(IServiceProxy service, IMessage message, boolean rejected, ServiceHandlerRoute route) {
         LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
+        DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
         AtomicLong directionSeq = directionToSequence.get(direction);
         ConnectivityMessage connectivityMessage;
 

@@ -1,4 +1,4 @@
-# Connect (3.6.1)
+# Connect (3.7.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -25,8 +25,15 @@ Parameters:
 + session-alias - that session alias will be set for all messages received or sent by this component. **It should be unique for each "Connect" component**;
 + workspace - the folder inside the container that will contain a plugin adapted to use in the TH2;
 + type - the service type from **services.xml** file. If service name from services.xml file contains `-` symbols they must be replaced with `_` symbol;
-+ name - the service name that will be displayed in the events in the report;
++ name - the service name that will be displayed in the events inside the report;
 + settings - the parameters that will be transformed to the actual service's settings specified in the **services.xml** file.
++ maxMessageBatchSize - the limitation for message batch size which connect sends to the first and to the second publish pins with. The default value is set to 100.
++ enableMessageSendingEvent - if this option is set to `true`, connect sends a separate event for every message sent which incomes from the pin with the send attribute. The default value is set to true
+
+## Metrics
+
+Connect component produces several metrics related to its activity.
++ th2_conn_incoming_msg_quantity / th2_conn_outgoing_msg_quantity are counter type metrics which are incremented when a message is sent or received via the implemented protocol.  They contain the `session_alias` attribute.
 
 ## Extension
 
@@ -94,6 +101,8 @@ spec:
     workspace: "/home/sailfish/workspace"
     type: "th2_service:Your_Service_Type"
     name: "your_service"
+    maxMessageBatchSize: 100
+    enableMessageSendingEvent: true
     settings:
       param1: "value1"
   pins:
@@ -109,6 +118,12 @@ spec:
 ```
 
 ## Release notes
+
+### 3.7.0
+
++ Added maxMessageBatchSize option to configure limitation of message batch size 
++ Added enableMessageSendingEvent option to manage the event emitted related to sent messages
++ Produce th2_conn_incoming_msg_quantity / th2_conn_outgoing_msg_quantity metrics
 
 ### 3.6.1
 

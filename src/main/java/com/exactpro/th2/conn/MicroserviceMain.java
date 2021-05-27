@@ -180,7 +180,8 @@ public class MicroserviceMain {
                 messageSender.stop();
             });
 
-            createPipeline(processor, processor::onComplete, eventBatchRouter, rawMessageRouter)
+            createPipeline(processor, processor::onComplete, eventBatchRouter, rawMessageRouter,
+                    configuration.getMaxMessageBatchSize(), configuration.isEnableMessageSendingEvent())
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
@@ -209,8 +210,8 @@ public class MicroserviceMain {
     private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(
             Flowable<ConnectivityMessage> flowable, Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
-            MessageRouter<RawMessageBatch> rawMessageRouter
-    ) {
+            MessageRouter<RawMessageBatch> rawMessageRouter,
+            int maxMessageBatchSize, boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
         return flowable.observeOn(PIPELINE_SCHEDULER)
@@ -221,12 +222,12 @@ public class MicroserviceMain {
                     Flowable<ConnectivityMessage> messageConnectable = group
                             .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
                             .publish()
-                            .refCount(direction == Direction.SECOND ? 2 : 1);
+                            .refCount(enableMessageSendingEvent && direction == Direction.SECOND ? 2 : 1);
 
-                    if (direction == Direction.SECOND) {
+                    if (enableMessageSendingEvent && direction == Direction.SECOND) {
                         subscribeToSendMessage(eventBatchRouter, messageConnectable);
                     }
-                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter);
+                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize);
 
                     return messageConnectable;
                 });
@@ -240,7 +241,7 @@ public class MicroserviceMain {
                     // because we are subscribed on a SECOND direction.
                     // Sailfish does not support sending multiple messages at once.
                     // So we should send only a single event here.
-                    // But just in case we are wrong we add checking for sending multiple events
+                    // But just in case we are wrong, we add checking for sending multiple events
                     boolean sent = false;
                     for (IMessage message : connectivityMessage.getSailfishMessages()) {
                         if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
@@ -261,11 +262,11 @@ public class MicroserviceMain {
     }
 
     private static void createPackAndPublishPipeline(Direction direction, Flowable<ConnectivityMessage> messageConnectable,
-                                                     MessageRouter<RawMessageBatch> rawMessageRouter) {
+            MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize) {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
-                .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, MAX_MESSAGES_COUNT)
+                .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, maxMessageBatchSize)
                 .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
                 .map(ConnectivityBatch::new)
