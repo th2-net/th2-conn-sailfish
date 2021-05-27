@@ -241,7 +241,7 @@ public class MicroserviceMain {
                     // because we are subscribed on a SECOND direction.
                     // Sailfish does not support sending multiple messages at once.
                     // So we should send only a single event here.
-                    // But just in case we are wrong we add checking for sending multiple events
+                    // But just in case we are wrong, we add checking for sending multiple events
                     boolean sent = false;
                     for (IMessage message : connectivityMessage.getSailfishMessages()) {
                         if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
