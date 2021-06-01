@@ -1,4 +1,4 @@
-# Connect (2.7.1)
+# Connect (2.8.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -117,8 +117,9 @@ spec:
 
 ## Changes
 
-+ 2.7.1
-    + Up version of th2-common
++ 2.8.0
+    + ability to get service from gRPC router via attributes
+    + reading dictionary from new directory (`var/th2/config/directory`)
 
 + 2.7.0
     + Migration to Sonatype
