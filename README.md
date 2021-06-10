@@ -119,6 +119,10 @@ spec:
 
 ## Release notes
 
+### 3.7.1
+
++ Update Sailfish version to 3.2.1572 (unwraps the EvolutionBatch when sending raw message)
+
 ### 3.7.0
 
 + Added maxMessageBatchSize option to configure limitation of message batch size 
