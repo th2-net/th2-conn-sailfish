@@ -1,4 +1,4 @@
-# Connect (2.8.0)
+# Connect (2.8.1)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -116,6 +116,9 @@ spec:
 ```
 
 ## Changes
+
++ 2.8.1
+    + Update Sailfish version to 3.2.1603
 
 + 2.8.0
     + ability to get service from gRPC router via attributes
