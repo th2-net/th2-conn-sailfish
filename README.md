@@ -1,4 +1,4 @@
-# Connect (3.7.2)
+# Connect (3.8.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -118,6 +118,12 @@ spec:
 ```
 
 ## Release notes
+
+### 3.8.0
+
++ Fixed configuration for gRPC server
+    + Added the property `workers`, which changes the count of gRPC server's threads
++ Disable waiting for connection recovery when closing the `SubscribeMonitor`    
 
 ### 3.7.2
 

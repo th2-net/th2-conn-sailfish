@@ -3,8 +3,11 @@ name: Dev build and publish Docker distributions to Github Container Registry gh
 on:
   push:
     branches-ignore:
-    - master
-    - version-*
+      - master
+      - version-*
+      - dependabot*
+    paths-ignore:
+      - README.md
 
 jobs:
   build:
