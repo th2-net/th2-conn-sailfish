@@ -121,8 +121,6 @@ spec:
 
 ### 3.8.0
 
-+ Fixed configuration for gRPC server
-    + Added the property `workers`, which changes the count of gRPC server's threads
 + Disable waiting for connection recovery when closing the `SubscribeMonitor`    
 
 ### 3.7.2
