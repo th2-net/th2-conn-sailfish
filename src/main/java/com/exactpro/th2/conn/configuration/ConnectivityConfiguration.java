@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -33,6 +33,8 @@ public class ConnectivityConfiguration {
     @JsonProperty(required = true)
     private Map<String, Object> settings;
 
+    private boolean allowUnknownEnumValues = false;
+
     public String getSessionAlias() {
         return sessionAlias;
     }
@@ -51,5 +53,9 @@ public class ConnectivityConfiguration {
 
     public Map<String, Object> getSettings() {
         return settings;
+    }
+
+    public boolean isAllowUnknownEnumValues() {
+        return allowUnknownEnumValues;
     }
 }
