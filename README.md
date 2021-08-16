@@ -1,4 +1,4 @@
-# Connect (2.8.1)
+# Connect (2.9.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -17,6 +17,7 @@ session-alias: "connectivity-alias"
 workspace: "/home/sailfish/workspace"
 type: "th2_service:Your_Service_Type"
 name: "your_service"
+allowUnknownEnumValues: false
 settings:
   param1: "value1"
 ```
@@ -26,6 +27,7 @@ Parameters:
 + workspace - the folder inside the container that will contain a plugin adapted to use in the TH2;
 + type - the service type from **services.xml** file. If service name from services.xml file contains `-` symbols they must be replaced with `_` symbol;
 + name - the service name that will be displayed in the events in the report;
++ allowUnknownEnumValues - allows unknown enum values for messages received via mq to send to the system. By default, it has value of `false`.
 + settings - the parameters that will be transformed to the actual service's settings specified in the **services.xml** file.
 
 ## Extension
@@ -95,6 +97,7 @@ spec:
     workspace: "/home/sailfish/workspace"
     type: "th2_service:Your_Service_Type"
     name: "your_service"
+    allowUnknownEnumValues: false
     settings:
       param1: "value1"
   pins:
@@ -116,6 +119,11 @@ spec:
 ```
 
 ## Changes
+
++ 2.9.0
+    + Update common version to 2.19.3
+    + Update sailfish utils version to 2.5.0
+    + Add `allowUnknownEnumValues` parameter
 
 + 2.8.1
     + Update Sailfish version to 3.2.1603
