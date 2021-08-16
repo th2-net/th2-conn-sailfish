@@ -22,6 +22,7 @@ import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
 import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
+import static com.exactpro.th2.sailfish.utils.ProtoToIMessageConverter.createParameters;
 import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
@@ -183,7 +184,13 @@ public class MicroserviceMain {
             SailfishURI senderDictionaryURI = serviceProxy.getSettings().getDictionary(dictionaryType);
             IDictionaryStructure dictionary = serviceFactory.getDictionary(senderDictionaryURI);
 
-            MessageSender messageSender = new MessageSender(serviceProxy, new ProtoToIMessageConverter(messageFactory, dictionary, senderDictionaryURI), parsedMessageBatch, eventDispatcher);
+            MessageSender messageSender = new MessageSender(serviceProxy,
+                    new ProtoToIMessageConverter(
+                            messageFactory, dictionary, senderDictionaryURI,
+                            createParameters()
+                                    .setAllowUnknownEnumValues(configuration.isAllowUnknownEnumValues())
+                    ),
+                    parsedMessageBatch, eventDispatcher);
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");
                 messageSender.stop();
