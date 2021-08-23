@@ -123,7 +123,7 @@ spec:
 
 #### Fixed:
 
-+ Netty services does not copy metadata to the `IMessage` when sending one. Now they do.
++ Netty services do not copy metadata to the `IMessage` when sending one. Now they do.
 
 ### 3.8.0
 
