@@ -121,7 +121,9 @@ spec:
 
 ### 3.9.0
 
-+ //TODO:fgdfg
++ Embedded sailfish service based on MINA decodes message as sender during send.
+  This approach is important for protocols where pair of messages have the same protocol message type and different structures depending on direction.
++ Updated th2-sailfish-utils from 3.4.0 to 3.8.0
 
 ### 3.8.1
 
