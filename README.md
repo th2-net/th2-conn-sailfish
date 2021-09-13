@@ -121,10 +121,10 @@ spec:
 
 ### 3.9.0
 
-+ Update `sailfish-core` version to `3.2.1674`
-+ Embedded Sailfish service based on MINA decodes the message as sender during sending. This approach is important for protocols in which a pair of messages have the same protocol message type and different structures depending on the direction.
-+ Update `th2-common` version to `3.25.1`
-+ Update `th2-sailfish-utils` version to `3.8.0`
++ Update `sailfish-core` version from `3.2.1650` to `3.2.1674`
+  + Embedded Sailfish service based on MINA decodes the message as sender during sending. This approach is important for protocols in which a pair of messages have the same protocol message type and different structures depending on the direction. 
++ Update `th2-common` version from `3.16.5` to `3.25.1`
++ Update `th2-sailfish-utils` version from `3.4.0` to `3.8.0`
     
 ### 3.8.1
 
