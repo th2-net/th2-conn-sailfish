@@ -37,9 +37,9 @@ Connect component produces several metrics related to its activity.
 
 ## Extension
 
-You can add the ability to connect to a target system by implementing your own service in the Sailfish format and putting it and its configuration to the correct places in the base image.
+You can add the ability to connect to a target system by implementing your own service in the Sailfish format and putting it together with its configuration to the correct places into the base image.
 
-You need to take the following steps:
+You need to perform the following steps:
 
 1. Create the implementation of the [com.exactpro.sf.services.IService](https://github.com/exactpro/sailfish-core/blob/master/BackEnd/Core/sailfish-core/src/main/java/com/exactpro/sf/services/IService.java).
 The examples of implementing this interface can be found [here](https://github.com/exactpro/sailfish-core/tree/master/BackEnd/Service).
@@ -65,14 +65,14 @@ This file must contain:
     version: 3.2.0.0
     core_version: 3.2.0
     ```
-4. Create you own image based on the current one and put all files to the correct places in the base image:
+4. Create you own image based on the current one and put all the files in the correct places in the base image:
     + Create the following directory - **${workspace}/plugins/th2_service**.
     _**${workspace}**_ - it is a folder from the "Connect" configuration.
-    If you use the _plugin_alias_ and _name_ different from _th2_service_ in the VERSION file correct the _th2_service_ folder name according to value you use.
+    If you use the _plugin_alias_ and _name_ different from _th2_service_ in the VERSION file correct the _th2_service_ folder name according to the value that you are useing.
     Let's name that directory as **PLUGIN_DIRECTORY** for simplicity. This name will be used in future steps.
-    + Artifact with the service(s) implementation(s) and all its dependencies should be put to the following directory - **${PLUGIN_DIRECTORY}/libs**.
-    + The configuration file created on the step 2 should be put to the following directory - **${PLUGIN_DIRECTORY}/cfg**.
-    + The _VERSION_ file created on step 3 should be put to the following directory - **${PLUGIN_DIRECTORY}/**.
+    + Artifact with the service(s) implementation(s) and all its dependencies should be put into the following directory - **${PLUGIN_DIRECTORY}/libs**.
+    + The configuration file created on the step 2 should be put into the following directory - **${PLUGIN_DIRECTORY}/cfg**.
+    + The _VERSION_ file created on step 3 should be put into the following directory - **${PLUGIN_DIRECTORY}/**.
 
 ## Pins
 
@@ -129,7 +129,7 @@ spec:
 
 #### Fixed:
 
-+ Netty services do not copy metadata to the `IMessage` when sending one. Now they do.
++ Netty services do not copy metadata to the `IMessage` when sending one. This problem was fixed and now they copy metadata.
 
 ### 3.8.0
 
@@ -152,12 +152,12 @@ spec:
 ### 3.6.1
 
 + Use release version for sailfish-core
-+ Alert if got ErrorMessage when sending raw message
++ An alert is sent if it gets an ErrorMessage when sending raw message
 + Copies message properties from the th2 proto Message to Sailfish IMessage when converting
 
 ### 3.6.0
 
-+ resets embedded log4j configuration before configuring from a file
++ resets embedded log4j configuration before configuring it from a file
 
 ### 3.5.1
 
