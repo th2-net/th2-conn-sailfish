@@ -124,18 +124,7 @@ spec:
 + Update `sailfish-core` version to `3.2.1674`
 + Embedded Sailfish service based on MINA decodes the message as sender during sending. This approach is important for protocols in which a pair of messages have the same protocol message type and different structures depending on the direction.
 + Update `th2-common` version to `3.25.1`
-  + Fixed possible NPE when adding the Exception to the event with null message
-  + Corrected exception messages
-  + Added classes for management metrics.
-  + Added ability for resubscribe on canceled subscriber.
-  + Extension method for `MessageRouter<EventBatch>` now send the event to all pins that satisfy the requested attributes set
 + Update `th2-sailfish-utils` version to `3.8.0`
-  + Added:
-    - `MessageFactoryProxy` wrapper for `IMessageFactory`
-    - `DefaultMessageFactoryProxy` implementation (can be used without dictionary)
-    - `Parameters` to configure the `ProtoToIMessageConverter`
-      - `stripTrailingZeros` - removes trailing zeroes for BigDecimal (0.100000 -> 0.1)
-  + Converter now adds `BigDecimal` in `plain` format to proto `Message`
     
 ### 3.8.1
 
