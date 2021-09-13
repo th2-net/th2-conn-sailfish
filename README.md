@@ -68,7 +68,7 @@ This file must contain:
 4. Create you own image based on the current one and put all the files in the correct places in the base image:
     + Create the following directory - **${workspace}/plugins/th2_service**.
     _**${workspace}**_ - it is a folder from the "Connect" configuration.
-    If you use the _plugin_alias_ and _name_ different from _th2_service_ in the VERSION file correct the _th2_service_ folder name according to the value that you are useing.
+    If you use the _plugin_alias_ and _name_ different from _th2_service_ in the VERSION file correct the _th2_service_ folder name according to the value that you are using.
     Let's name that directory as **PLUGIN_DIRECTORY** for simplicity. This name will be used in future steps.
     + Artifact with the service(s) implementation(s) and all its dependencies should be put into the following directory - **${PLUGIN_DIRECTORY}/libs**.
     + The configuration file created on the step 2 should be put into the following directory - **${PLUGIN_DIRECTORY}/cfg**.
