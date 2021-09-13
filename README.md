@@ -1,4 +1,4 @@
-# Connect (3.8.1)
+# Connect (3.9.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -119,6 +119,23 @@ spec:
 
 ## Release notes
 
+### 3.9.0
+
++ Update `sailfish-core` version to `3.2.1674` (fix problem with truncation of fractions of seconds in time fields)
++ Update `th2-common` version to `3.25.1`
+  + Fixed possible NPE when adding the Exception to the event with null message
+  + Corrected exception messages
+  + Added classes for management metrics.
+  + Added ability for resubscribe on canceled subscriber.
+  + Extension method for `MessageRouter<EventBatch>` now send the event to all pins that satisfy the requested attributes set
++ Update `th2-sailfish-utils` version to `3.8.0`
+  + Added:
+    - `MessageFactoryProxy` wrapper for `IMessageFactory`
+    - `DefaultMessageFactoryProxy` implementation (can be used without dictionary)
+    - `Parameters` to configure the `ProtoToIMessageConverter`
+      - `stripTrailingZeros` - removes trailing zeroes for BigDecimal (0.100000 -> 0.1)
+  + Converter now adds `BigDecimal` in `plain` format to proto `Message`
+    
 ### 3.8.1
 
 #### Fixed:
