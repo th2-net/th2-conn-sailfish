@@ -121,7 +121,7 @@ spec:
 
 ### 3.9.0
 
-+ Update `sailfish-core` version to `3.2.1674` (fix problem with truncation of fractions of seconds in time fields)
++ Update `sailfish-core` version to `3.2.1674`
 + Embedded Sailfish service based on MINA decodes the message as sender during sending. This approach is important for protocols in which a pair of messages have the same protocol message type and different structures depending on the direction.
 + Update `th2-common` version to `3.25.1`
   + Fixed possible NPE when adding the Exception to the event with null message
