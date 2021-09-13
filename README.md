@@ -1,4 +1,4 @@
-# Connect (3.8.1)
+# Connect (3.9.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -37,17 +37,17 @@ Connect component produces several metrics related to its activity.
 
 ## Extension
 
-You can add the ability to connect to a target system by implementing your own service in the Sailfish format and putting it and its configuration to the correct places in the base image.
+You can add the ability to connect to a target system by implementing your own service in the Sailfish format and putting it together with its configuration to the correct places into the base image.
 
-You need to take the following steps:
+You need to perform the following steps:
 
 1. Create the implementation of the [com.exactpro.sf.services.IService](https://github.com/exactpro/sailfish-core/blob/master/BackEnd/Core/sailfish-core/src/main/java/com/exactpro/sf/services/IService.java).
-The examples of implementing this interface can be found [here](https://github.com/exactpro/sailfish-core/tree/master/BackEnd/Service).
-If the protocol is already implemented in the Sailfish services you can simply use the dependencies on the service's artifact for that protocol.
+   The examples of implementing this interface can be found [here](https://github.com/exactpro/sailfish-core/tree/master/BackEnd/Service).
+   If the protocol is already implemented in the Sailfish services you can simply use the dependencies on the service's artifact for that protocol.
 
 2. Create the **services.xml** configuration file that contains the description for services you can use from that "Connect" component.
-You can find the example [here](https://github.com/th2-net/th2-conn-generic/blob/master/conn-fix/src/main/plugin/cfg/services.xml).
-This file must contain:
+   You can find the example [here](https://github.com/th2-net/th2-conn-generic/blob/master/conn-fix/src/main/plugin/cfg/services.xml).
+   This file must contain:
     + service name - the alias to use it from the "Connect" component;
     + the full class name of the _com.exactpro.sf.services.IService_ interface implementation for the protocol;
     + the full settings' class name for that protocol;
@@ -65,14 +65,14 @@ This file must contain:
     version: 3.2.0.0
     core_version: 3.2.0
     ```
-4. Create you own image based on the current one and put all files to the correct places in the base image:
+4. Create you own image based on the current one and put all the files in the correct places in the base image:
     + Create the following directory - **${workspace}/plugins/th2_service**.
-    _**${workspace}**_ - it is a folder from the "Connect" configuration.
-    If you use the _plugin_alias_ and _name_ different from _th2_service_ in the VERSION file correct the _th2_service_ folder name according to value you use.
-    Let's name that directory as **PLUGIN_DIRECTORY** for simplicity. This name will be used in future steps.
-    + Artifact with the service(s) implementation(s) and all its dependencies should be put to the following directory - **${PLUGIN_DIRECTORY}/libs**.
-    + The configuration file created on the step 2 should be put to the following directory - **${PLUGIN_DIRECTORY}/cfg**.
-    + The _VERSION_ file created on step 3 should be put to the following directory - **${PLUGIN_DIRECTORY}/**.
+      _**${workspace}**_ - it is a folder from the "Connect" configuration.
+      If you use the _plugin_alias_ and _name_ different from _th2_service_ in the VERSION file correct the _th2_service_ folder name according to the value that you are using.
+      Let's name that directory as **PLUGIN_DIRECTORY** for simplicity. This name will be used in future steps.
+    + Artifact with the service(s) implementation(s) and all its dependencies should be put into the following directory - **${PLUGIN_DIRECTORY}/libs**.
+    + The configuration file created on the step 2 should be put into the following directory - **${PLUGIN_DIRECTORY}/cfg**.
+    + The _VERSION_ file created on step 3 should be put into the following directory - **${PLUGIN_DIRECTORY}/**.
 
 ## Pins
 
@@ -119,11 +119,16 @@ spec:
 
 ## Release notes
 
+### 3.9.0
+
++ Update `sailfish-core` version from `3.2.1650` to `3.2.1674`
+  + Embedded Sailfish service based on MINA decodes the message as sender during sending. This approach is important for protocols in which a pair of messages have the same protocol message type and different structures depending on the direction. 
++ Update `th2-common` version from `3.16.5` to `3.25.1`
++ Update `th2-sailfish-utils` version from `3.4.0` to `3.8.0`
+    
 ### 3.8.1
 
-#### Fixed:
-
-+ Netty services do not copy metadata to the `IMessage` when sending one. Now they do.
++ Netty services do not copy metadata to the `IMessage` when sending one. This problem was fixed and now they copy metadata.
 
 ### 3.8.0
 
@@ -146,12 +151,12 @@ spec:
 ### 3.6.1
 
 + Use release version for sailfish-core
-+ Alert if got ErrorMessage when sending raw message
++ An alert is sent if it gets an ErrorMessage when sending raw message
 + Copies message properties from the th2 proto Message to Sailfish IMessage when converting
 
 ### 3.6.0
 
-+ resets embedded log4j configuration before configuring from a file
++ resets embedded log4j configuration before configuring it from a file
 
 ### 3.5.1
 
