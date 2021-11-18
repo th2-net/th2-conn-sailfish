@@ -6,7 +6,7 @@ plugins {
 
 ext {
     sharedDir                       = file("${project.rootDir}/shared")
-    sailfishVersion                 = '3.2-SNAPSHOT'
+    sailfishVersion                 = '3.2.1741'
 }
 
 group = 'com.exactpro.th2'
@@ -76,11 +76,7 @@ dependencies {
 
     implementation 'io.prometheus:simpleclient'
 
-    implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}") {
-        version {
-            strictly("${sailfishVersion}")
-        }
-    }
+    implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}")
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
 }
