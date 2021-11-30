@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,15 +24,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.exactpro.th2.common.grpc.Direction;
-import com.exactpro.th2.common.grpc.MessageBatch;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 
 public class ConnectivityBatch {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityBatch.class);
 
+    private final String bookName;
     private final String sessionAlias;
-    private final long sequence;
     private final Direction direction;
+    private final long sequence;
     private final List<ConnectivityMessage> connectivityMessages;
 
     public ConnectivityBatch(List<ConnectivityMessage> connectivityMessages) {
@@ -41,12 +41,13 @@ public class ConnectivityBatch {
         }
 
         ConnectivityMessage firstMessage = connectivityMessages.get(0);
+        this.bookName = firstMessage.getBookName();
         this.sessionAlias = firstMessage.getSessionAlias();
         this.direction = firstMessage.getDirection();
-        checkMessages(connectivityMessages, sessionAlias, direction);
+        checkMessages(connectivityMessages, bookName, sessionAlias, direction);
 
-        this.connectivityMessages = List.copyOf(connectivityMessages);
         this.sequence = firstMessage.getSequence();
+        this.connectivityMessages = List.copyOf(connectivityMessages);
     }
 
     public RawMessageBatch convertToProtoRawBatch() {
@@ -57,42 +58,54 @@ public class ConnectivityBatch {
                 .build();
     }
 
-    public String getSessionAlias() {
-        return sessionAlias;
+    public String getBookName() {
+        return bookName;
     }
 
-    public long getSequence() {
-        return sequence;
+    public String getSessionAlias() {
+        return sessionAlias;
     }
 
     public Direction getDirection() {
         return direction;
     }
 
+    public long getSequence() {
+        return sequence;
+    }
+
     public List<ConnectivityMessage> getMessages() {
         return connectivityMessages;
     }
 
-    private static void checkMessages(List<ConnectivityMessage> iMessages, String sessionAlias, Direction direction) {
+    private static void checkMessages(List<ConnectivityMessage> iMessages, String bookName, String sessionAlias, Direction direction) {
         if (iMessages.isEmpty()) {
             throw new IllegalArgumentException("List can't be empty");
         }
 
-        if (!iMessages.stream()
-                .allMatch(iMessage -> Objects.equals(sessionAlias, iMessage.getSessionAlias())
-                        && direction == iMessage.getDirection())) {
-            throw new IllegalArgumentException("List " + iMessages + " has elemnts with incorrect metadata, expected session alias '"+ sessionAlias +"' direction '" + direction + '\'');
+        if (iMessages.stream()
+                .anyMatch(iMessage -> !Objects.equals(bookName, iMessage.getBookName())
+                        || !Objects.equals(sessionAlias, iMessage.getSessionAlias())
+                        || direction != iMessage.getDirection())
+        ) {
+            throw new IllegalArgumentException(String.format(
+                    "List %s has elements with incorrect metadata, expected book name '%s', session alias '%s', direction '%s'",
+                    iMessages,
+                    bookName,
+                    sessionAlias,
+                    direction
+            ));
         }
 
-        if (!IntStream.range(0, iMessages.size() - 1)
-                .allMatch(index -> iMessages.get(index).getSequence() + 1 == iMessages.get(index + 1).getSequence())) {
+        if (IntStream.range(0, iMessages.size() - 1)
+                .anyMatch(index -> iMessages.get(index).getSequence() + 1 != iMessages.get(index + 1).getSequence())) {
             if (LOGGER.isErrorEnabled()) {
                 LOGGER.error("List {} hasn't elements with incremental sequence with one step", iMessages.stream()
                                             .map(ConnectivityMessage::getSequence)
                                             .collect(Collectors.toList()));
             }
 
-            // FIXME: Replace logging to thowing exception after solving message reordering problem
+            // FIXME: Replace logging to throwing exception after solving message reordering problem
 //            throw new IllegalArgumentException("List " + iMessages.stream()
 //                    .map(ConnectivityMessage::getSequence)
 //                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");

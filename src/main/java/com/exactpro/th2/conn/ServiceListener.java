@@ -25,10 +25,13 @@ import com.exactpro.sf.services.ServiceEvent.Level;
 import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
+import com.exactpro.th2.common.grpc.ConnectionID;
+import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.MessageID;
+import com.exactpro.th2.common.grpc.MessageID.Builder;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
-import com.exactpro.th2.common.grpc.Direction;
 
 import static com.exactpro.th2.common.grpc.Direction.FIRST;
 import static com.exactpro.th2.common.grpc.Direction.SECOND;
@@ -73,18 +76,20 @@ public class ServiceListener implements IServiceListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceListener.class);
 
     private final Map<Direction, AtomicLong> directionToSequence;
+    private final Builder idBuilder;
     private final String sessionAlias;
     private final Subscriber<ConnectivityMessage> subscriber;
     private final EventDispatcher eventDispatcher;
 
     public ServiceListener(
             Map<Direction, AtomicLong> directionToSequence,
-            String sessionAlias,
+            Builder idBuilder,
             Subscriber<ConnectivityMessage> subscriber,
             EventDispatcher eventDispatcher
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
-        this.sessionAlias = requireNonNull(sessionAlias, "Session alias can't be null");
+        this.idBuilder = requireNonNull(idBuilder, "Message id builder can't be null");
+        this.sessionAlias = requireNonNull(idBuilder.getConnectionId().getSessionAlias(), "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
     }
@@ -126,16 +131,18 @@ public class ServiceListener implements IServiceListener {
         LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
         DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
-        AtomicLong directionSeq = directionToSequence.get(direction);
+        MessageID messageId = idBuilder
+                .setConnectionId(ConnectionID.newBuilder().setSessionAlias(sessionAlias).build())
+                .setDirection(direction)
+                .setSequence(directionToSequence.get(direction).incrementAndGet())
+                .build();
+
         ConnectivityMessage connectivityMessage;
-
         if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
-            EvolutionBatch batch = new EvolutionBatch(message);
-            connectivityMessage = createConnectivityMessage(batch.getBatch(), direction, directionSeq);
+            connectivityMessage = createConnectivityMessage(new EvolutionBatch(message).getBatch(), messageId);
         } else {
-            connectivityMessage = createConnectivityMessage(List.of(message), direction, directionSeq);
+            connectivityMessage = createConnectivityMessage(List.of(message), messageId);
         }
-
         subscriber.onNext(connectivityMessage);
     }
 
@@ -156,9 +163,14 @@ public class ServiceListener implements IServiceListener {
     }
 
     @NonNull
-    private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, Direction direction, AtomicLong directionSeq) {
-        long sequence = directionSeq.incrementAndGet();
-        LOGGER.debug("On message: direction '{}'; sequence '{}'; messages '{}'", direction, sequence, messages);
-        return new ConnectivityMessage(messages, sessionAlias, direction, sequence);
+    private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, MessageID messageId) {
+        LOGGER.debug(
+                "On message: book name `{}`; direction '{}'; sequence '{}'; messages '{}'",
+                messageId.getBookName(),
+                messageId.getDirection(),
+                messageId.getSequence(),
+                messages
+        );
+        return new ConnectivityMessage(messages, messageId);
     }
 }

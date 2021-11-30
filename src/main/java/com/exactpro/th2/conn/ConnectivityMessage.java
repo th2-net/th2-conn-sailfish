@@ -32,7 +32,6 @@ import org.slf4j.LoggerFactory;
 import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
-import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageID;
@@ -51,22 +50,22 @@ public class ConnectivityMessage {
 
     private final List<IMessage> sailfishMessages;
 
-    // This variables can be calculated in methods
+    // These variables can be calculated in methods
     private final MessageID messageID;
     private final Timestamp timestamp;
 
-    public ConnectivityMessage(List<IMessage> sailfishMessages, String sessionAlias, Direction direction, long sequence) {
+    public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID messageId) {
         this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Message can't be null"));
         if (sailfishMessages.isEmpty()) {
-            throw new IllegalArgumentException("At least one sailfish messages must be passed. Session alias: " + sessionAlias + "; Direction: " + direction);
+            throw new IllegalArgumentException(String.format(
+                    "At least one sailfish message must be passed. Book name: %s; Session alias: %s; Direction: %s",
+                    messageId.getBookName(),
+                    messageId.getConnectionId().getSessionAlias(),
+                    messageId.getDirection())
+            );
         }
-        messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null")),
-                requireNonNull(direction, "Direction can't be null"), sequence);
+        messageID = messageId;
         timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
-    }
-
-    public String getSessionAlias() {
-        return messageID.getConnectionId().getSessionAlias();
     }
 
     public RawMessage convertToProtoRawMessage() {
@@ -110,12 +109,20 @@ public class ConnectivityMessage {
         return messageID;
     }
 
-    public long getSequence() {
-        return messageID.getSequence();
+    public String getBookName() {
+        return messageID.getBookName();
+    }
+    
+    public String getSessionAlias() {
+        return messageID.getConnectionId().getSessionAlias();
     }
 
     public Direction getDirection() {
         return messageID.getDirection();
+    }
+
+    public long getSequence() {
+        return messageID.getSequence();
     }
 
     public List<IMessage> getSailfishMessages() {
@@ -137,20 +144,6 @@ public class ConnectivityMessage {
                     byte[] rawMessage = MetadataExtensions.getRawMessage(it.getMetaData());
                     return rawMessage == null ? 0 : rawMessage.length;
                 }).sum();
-    }
-
-    private static ConnectionID createConnectionID(String sessionAlias) {
-        return ConnectionID.newBuilder()
-                .setSessionAlias(sessionAlias)
-                .build();
-    }
-
-    private static MessageID createMessageID(ConnectionID connectionId, Direction direction, long sequence) {
-        return MessageID.newBuilder()
-                .setConnectionId(connectionId)
-                .setDirection(direction)
-                .setSequence(sequence)
-                .build();
     }
 
     private static RawMessageMetadata.Builder createRawMessageMetadataBuilder(MessageID messageID, Timestamp timestamp) {
