@@ -278,7 +278,7 @@ public class MicroserviceMain {
                         Event event = Event.start().endTimestamp()
                                 .name("Send '" + message.getName() + "' message")
                                 .type("Send message")
-                                .messageID(connectivityMessage.getMessageID());
+                                .messageID(connectivityMessage.getMessageId());
                         LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
                         storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
                         sent = true;

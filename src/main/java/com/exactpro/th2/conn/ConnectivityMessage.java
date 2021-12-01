@@ -51,7 +51,7 @@ public class ConnectivityMessage {
     private final List<IMessage> sailfishMessages;
 
     // These variables can be calculated in methods
-    private final MessageID messageID;
+    private final MessageID messageId;
     private final Timestamp timestamp;
 
     public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID messageId) {
@@ -64,14 +64,14 @@ public class ConnectivityMessage {
                     messageId.getDirection())
             );
         }
-        messageID = messageId;
+        this.messageId = requireNonNull(messageId, "Message id can't be null");
         timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
     }
 
     public RawMessage convertToProtoRawMessage() {
         Builder builder = RawMessage.newBuilder();
 
-        RawMessageMetadata.Builder rawMessageMetadata = createRawMessageMetadataBuilder(messageID, timestamp);
+        RawMessageMetadata.Builder rawMessageMetadata = createRawMessageMetadataBuilder(messageId, timestamp);
         int totalSize = calculateTotalBodySize(sailfishMessages);
         if (totalSize == 0) {
             throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
@@ -85,7 +85,7 @@ public class ConnectivityMessage {
                 EventID parentEventID = SailfishMetadataExtensions.getParentEventID(sfMetadata);
                 // Should never happen because the Sailfish does not support sending multiple messages at once
                 if (builder.hasParentEventId()) {
-                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageID, builder.getParentEventId(), parentEventID);
+                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageId, builder.getParentEventId(), parentEventID);
                 }
                 builder.setParentEventId(parentEventID);
             }
@@ -105,24 +105,24 @@ public class ConnectivityMessage {
                         .build();
     }
 
-    public MessageID getMessageID() {
-        return messageID;
+    public MessageID getMessageId() {
+        return messageId;
     }
 
     public String getBookName() {
-        return messageID.getBookName();
+        return messageId.getBookName();
     }
     
     public String getSessionAlias() {
-        return messageID.getConnectionId().getSessionAlias();
+        return messageId.getConnectionId().getSessionAlias();
     }
 
     public Direction getDirection() {
-        return messageID.getDirection();
+        return messageId.getDirection();
     }
 
     public long getSequence() {
-        return messageID.getSequence();
+        return messageId.getSequence();
     }
 
     public List<IMessage> getSailfishMessages() {
@@ -132,7 +132,7 @@ public class ConnectivityMessage {
     @Override
     public String toString() {
         return new ToStringBuilder(this)
-                .append("messageID", shortDebugString(messageID))
+                .append("messageId", shortDebugString(messageId))
                 .append("timestamp", shortDebugString(timestamp))
                 .append("sailfishMessages", sailfishMessages.stream().map(IMessage::getName).collect(Collectors.joining(", ")))
                 .toString();
@@ -146,9 +146,9 @@ public class ConnectivityMessage {
                 }).sum();
     }
 
-    private static RawMessageMetadata.Builder createRawMessageMetadataBuilder(MessageID messageID, Timestamp timestamp) {
+    private static RawMessageMetadata.Builder createRawMessageMetadataBuilder(MessageID messageId, Timestamp timestamp) {
         return RawMessageMetadata.newBuilder()
-                .setId(messageID)
+                .setId(messageId)
                 .setTimestamp(timestamp);
     }
 
