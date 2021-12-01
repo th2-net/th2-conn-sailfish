@@ -55,7 +55,7 @@ public class ConnectivityMessage {
     private final Timestamp timestamp;
 
     public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID messageId) {
-        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Message can't be null"));
+        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Messages can't be null"));
         if (sailfishMessages.isEmpty()) {
             throw new IllegalArgumentException(String.format(
                     "At least one sailfish message must be passed. Book name: %s; Session alias: %s; Direction: %s",
