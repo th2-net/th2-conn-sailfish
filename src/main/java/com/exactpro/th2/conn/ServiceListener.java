@@ -43,6 +43,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
@@ -76,20 +77,20 @@ public class ServiceListener implements IServiceListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceListener.class);
 
     private final Map<Direction, AtomicLong> directionToSequence;
-    private final Builder idBuilder;
+    private final Supplier<Builder> idBuilder;
     private final String sessionAlias;
     private final Subscriber<ConnectivityMessage> subscriber;
     private final EventDispatcher eventDispatcher;
 
     public ServiceListener(
             Map<Direction, AtomicLong> directionToSequence,
-            Builder idBuilder,
+            Supplier<Builder> idBuilder,
             Subscriber<ConnectivityMessage> subscriber,
             EventDispatcher eventDispatcher
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.idBuilder = requireNonNull(idBuilder, "Message id builder can't be null");
-        this.sessionAlias = requireNonNull(idBuilder.getConnectionId().getSessionAlias(), "Session alias can't be null");
+        this.sessionAlias = requireNonNull(idBuilder.get().getConnectionId().getSessionAlias(), "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
     }
@@ -131,8 +132,7 @@ public class ServiceListener implements IServiceListener {
         LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
         DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
-        MessageID messageId = idBuilder
-                .setConnectionId(ConnectionID.newBuilder().setSessionAlias(sessionAlias).build())
+        MessageID messageId = idBuilder.get()
                 .setDirection(direction)
                 .setSequence(directionToSequence.get(direction).incrementAndGet())
                 .build();

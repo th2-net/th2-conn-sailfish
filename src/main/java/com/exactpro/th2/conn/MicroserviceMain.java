@@ -60,6 +60,7 @@ import com.exactpro.sf.externalapi.ISettingsProxy;
 import com.exactpro.sf.externalapi.ServiceFactory;
 import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
 import com.exactpro.th2.common.grpc.RawMessage;
@@ -165,7 +166,8 @@ public class MicroserviceMain {
 
             IServiceListener serviceListener = new ServiceListener(
                     getActualSequences(),
-                    factory.newMessageIDBuilder(),
+                    () -> finalFactory.newMessageIDBuilder()
+                            .setConnectionId(ConnectionID.newBuilder().setSessionAlias(configuration.getSessionAlias())),
                     processor,
                     eventDispatcher
             );
