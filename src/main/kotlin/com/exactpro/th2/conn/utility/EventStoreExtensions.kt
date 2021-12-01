@@ -39,7 +39,7 @@ private val LOGGER = KotlinLogging.logger { }
 @Throws(JsonProcessingException::class)
 fun MessageRouter<EventBatch>.storeEvent(event: Event, parentEventID: String? = null) : Event {
     try {
-        send(EventBatch.newBuilder().addEvents(event.toProto(toEventID(parentEventID))).build())
+        send(EventBatch.newBuilder().addEvents(event.toProto(toEventID(parentEventID, event.bookName))).build())
     } catch (e: Exception) {
         throw RuntimeException("Event '" + event.id + "' store failure", e)
     }
@@ -54,13 +54,13 @@ fun MessageRouter<EventBatch>.storeEvent(event: Event, parentEventID: String? = 
  */
 @JvmOverloads
 @Throws(JsonProcessingException::class)
-fun MessageRouter<EventBatch>.storeEvents(parentEventID: String? = null, vararg events: Event) {
+fun MessageRouter<EventBatch>.storeEvents(parentEventID: String? = null, bookName: String, vararg events: Event) {
     try {
         val batchBuilder = EventBatch.newBuilder().apply {
             if (parentEventID != null) {
                 setParentEventId(EventID.newBuilder().setId(parentEventID))
             }
-            val parentId = toEventID(parentEventID)
+            val parentId = toEventID(parentEventID, bookName)
             for (event in events) {
                 addEvents(event.toProto(parentId))
             }

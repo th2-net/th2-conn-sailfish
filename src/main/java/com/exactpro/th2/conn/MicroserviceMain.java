@@ -138,7 +138,9 @@ public class MicroserviceMain {
 
             MessageRouter<EventBatch> eventBatchRouter = factory.getEventBatchRouter();
 
-            var rootEvent = Event.start().endTimestamp()
+            var rootEvent = Event.start()
+                    .bookName(factory.getBoxConfiguration().getBookName())
+                    .endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
                     .type("Microservice");
             String rootEventID = storeEvent(eventBatchRouter, rootEvent).getId();
