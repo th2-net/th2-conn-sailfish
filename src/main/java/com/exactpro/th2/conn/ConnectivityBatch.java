@@ -83,10 +83,10 @@ public class ConnectivityBatch {
             throw new IllegalArgumentException("List can't be empty");
         }
 
-        if (iMessages.stream()
-                .anyMatch(iMessage -> !Objects.equals(bookName, iMessage.getBookName())
-                        || !Objects.equals(sessionAlias, iMessage.getSessionAlias())
-                        || direction != iMessage.getDirection())
+        if (!iMessages.stream()
+                .allMatch(iMessage -> Objects.equals(bookName, iMessage.getBookName())
+                        && Objects.equals(sessionAlias, iMessage.getSessionAlias())
+                        && direction == iMessage.getDirection())
         ) {
             throw new IllegalArgumentException(String.format(
                     "List %s has elements with incorrect metadata, expected book name '%s', session alias '%s', direction '%s'",
