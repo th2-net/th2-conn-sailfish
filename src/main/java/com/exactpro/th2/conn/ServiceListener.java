@@ -25,7 +25,6 @@ import com.exactpro.sf.services.ServiceEvent.Level;
 import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
-import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.grpc.MessageID.Builder;
@@ -78,6 +77,7 @@ public class ServiceListener implements IServiceListener {
 
     private final Map<Direction, AtomicLong> directionToSequence;
     private final Supplier<Builder> idBuilder;
+    private final String bookName;
     private final String sessionAlias;
     private final Subscriber<ConnectivityMessage> subscriber;
     private final EventDispatcher eventDispatcher;
@@ -90,7 +90,9 @@ public class ServiceListener implements IServiceListener {
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.idBuilder = requireNonNull(idBuilder, "Message id builder can't be null");
-        this.sessionAlias = requireNonNull(idBuilder.get().getConnectionId().getSessionAlias(), "Session alias can't be null");
+        Builder builder = idBuilder.get();
+        this.bookName = requireNonNull(builder.getBookName(), "Book name can't be null");
+        this.sessionAlias = requireNonNull(builder.getConnectionId().getSessionAlias(), "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
     }
@@ -115,7 +117,7 @@ public class ServiceListener implements IServiceListener {
         LOGGER.error("Session '{}' threw exception", sessionAlias, cause);
         try {
             Event event = Event.start()
-                    .bookName(idBuilder.get().getBookName())
+                    .bookName(bookName)
                     .endTimestamp()
                     .name("Connection error")
                     .status(Status.FAILED)
@@ -153,7 +155,7 @@ public class ServiceListener implements IServiceListener {
         LOGGER.info("Session '{}' emitted service event '{}'", sessionAlias, serviceEvent);
         try {
             Event event = Event.start()
-                    .bookName(idBuilder.get().getBookName())
+                    .bookName(bookName)
                     .endTimestamp()
                     .name(serviceEvent.getMessage())
                     .status(serviceEvent.getLevel() == Level.ERROR ? Status.FAILED : Status.PASSED)
