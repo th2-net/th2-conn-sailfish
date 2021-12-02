@@ -96,6 +96,19 @@ public class MessageSender {
     }
 
     private void sendMessage(RawMessage protoMsg) throws InterruptedException {
+        if (protoMsg.getParentEventId().getBookName().equals(untrackedMessagesRoot.getBookName())) {
+            storeErrorEvent(
+                    createErrorEvent(String.format(
+                            "Parent event book name is '%s' but should be '%s' for message with session alias '%s' and direction '%s'",
+                            protoMsg.getParentEventId().getBookName(),
+                            untrackedMessagesRoot.getBookName(),
+                            protoMsg.getMetadata().getId().getConnectionId().getSessionAlias(),
+                            protoMsg.getMetadata().getId().getDirection()
+                    )).bookName(protoMsg.getParentEventId().getBookName()),
+                    protoMsg.getParentEventId()
+            );
+            return;
+        }
         byte[] data = protoMsg.getBody().toByteArray();
         try {
             serviceProxy.sendRaw(data, toSailfishMetadata(protoMsg));
