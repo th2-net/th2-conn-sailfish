@@ -33,7 +33,6 @@ import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -63,14 +62,12 @@ import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
-import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.common.schema.message.QueueAttribute;
 import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
 import com.exactpro.th2.conn.events.EventDispatcher;
-import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.events.EventType;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -193,15 +190,9 @@ public class MicroserviceMain {
                 messageSender.stop();
             });
 
-            createPipeline(
-                    processor,
-                    processor::onComplete,
-                    eventBatchRouter,
-                    rawMessageRouter,
-                    configuration.getMaxMessageBatchSize(),
-                    configuration.isEnableMessageSendingEvent(),
-                    eventDispatcher
-            ).blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
+            createPipeline(processor, processor::onComplete, eventBatchRouter, rawMessageRouter,
+                    configuration.getMaxMessageBatchSize(), configuration.isEnableMessageSendingEvent())
+                    .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
         } catch (IllegalArgumentException e) { LOGGER.error(e.getMessage(), e); exitCode = 4;
@@ -227,14 +218,10 @@ public class MicroserviceMain {
     }
 
     private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(
-            Flowable<ConnectivityMessage> flowable,
-            Action terminateFlowable,
+            Flowable<ConnectivityMessage> flowable, Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
             MessageRouter<RawMessageBatch> rawMessageRouter,
-            int maxMessageBatchSize,
-            boolean enableMessageSendingEvent,
-            EventDispatcher eventDispatcher
-    ) {
+            int maxMessageBatchSize, boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
         return flowable.observeOn(PIPELINE_SCHEDULER)
@@ -250,13 +237,7 @@ public class MicroserviceMain {
                     if (enableMessageSendingEvent && direction == Direction.SECOND) {
                         subscribeToSendMessage(eventBatchRouter, messageConnectable);
                     }
-                    createPackAndPublishPipeline(
-                            direction,
-                            messageConnectable,
-                            rawMessageRouter,
-                            maxMessageBatchSize,
-                            eventDispatcher
-                    );
+                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize);
 
                     return messageConnectable;
                 });
@@ -291,7 +272,7 @@ public class MicroserviceMain {
     }
 
     private static void createPackAndPublishPipeline(Direction direction, Flowable<ConnectivityMessage> messageConnectable,
-            MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize, EventDispatcher eventDispatcher) {
+            MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize) {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
@@ -313,24 +294,7 @@ public class MicroserviceMain {
                 .subscribe(batch -> {
                     try {
                         RawMessageBatch rawBatch = batch.convertToProtoRawBatch();
-                        RawMessage firstMessage = rawBatch.getMessages(0);
-                        String firstMessageBookName = firstMessage.getMetadata().getId().getBookName();
-                        String parentEventIdBookName = firstMessage.getParentEventId().getBookName();
-                        if (!Objects.equals(firstMessageBookName, parentEventIdBookName)) {
-                            eventDispatcher.store(EventHolder.createError(Event
-                                    .start()
-                                    .endTimestamp()
-                                    .name(String.format(
-                                            "Message in raw batch has bookName `%s but parentEventId book name is `%s`",
-                                            firstMessageBookName,
-                                            parentEventIdBookName
-                                    ))
-                                    .status(Event.Status.FAILED)
-                                    .type("Error")
-                            ));
-                        } else {
-                            rawMessageRouter.sendAll(rawBatch, (direction == Direction.FIRST ? QueueAttribute.FIRST : QueueAttribute.SECOND).toString());
-                        }
+                        rawMessageRouter.sendAll(rawBatch, (direction == Direction.FIRST ? QueueAttribute.FIRST : QueueAttribute.SECOND).toString());
                     } catch (Exception e) {
                         if (LOGGER.isErrorEnabled()) {
                             LOGGER.error("Cannot send batch with sequences: {}",
