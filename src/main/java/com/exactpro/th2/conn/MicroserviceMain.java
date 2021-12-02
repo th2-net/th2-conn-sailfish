@@ -140,28 +140,32 @@ public class MicroserviceMain {
                     .endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
                     .type("Microservice");
-            String rootEventID = storeEvent(eventBatchRouter, rootEvent).getId();
+            var rootEventId = storeEvent(eventBatchRouter, rootEvent).getEventId();
 
             var errorEventsRoot = Event.start().endTimestamp()
                     .name("Errors")
                     .type("ConnectivityErrors");
-            storeEvent(eventBatchRouter, errorEventsRoot, rootEventID);
+            storeEvent(eventBatchRouter, errorEventsRoot, rootEventId);
 
             var serviceEventsRoot = Event.start().endTimestamp()
                     .name("ServiceEvents")
                     .type("ConnectivityServiceEvents");
-            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
+            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventId);
 
             var untrackedSentMessages = Event.start().endTimestamp()
                     .name("UntrackedMessages")
                     .description("Contains messages that we send via this connectivity but does not have attacked parent event ID")
                     .type("ConnectivityUntrackedMessages");
-            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
+            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventId);
 
-            var eventDispatcher = EventDispatcher.createDispatcher(eventBatchRouter, rootEventID, Map.of(
-                    EventType.ERROR, errorEventsRoot.getId(),
-                    EventType.SERVICE_EVENT, serviceEventsRoot.getId()
-            ));
+            var eventDispatcher = EventDispatcher.createDispatcher(
+                    eventBatchRouter,
+                    rootEventId,
+                    Map.of(
+                            EventType.ERROR, errorEventsRoot.getEventId(),
+                            EventType.SERVICE_EVENT, serviceEventsRoot.getEventId()
+                    )
+            );
 
             IServiceListener serviceListener = new ServiceListener(
                     getActualSequences(),
@@ -265,7 +269,7 @@ public class MicroserviceMain {
                                 .type("Send message")
                                 .messageID(connectivityMessage.getMessageId());
                         LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
-                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
+                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()));
                         sent = true;
                     }
                 });

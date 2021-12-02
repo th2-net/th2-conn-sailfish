@@ -37,9 +37,12 @@ private val LOGGER = KotlinLogging.logger { }
 
 @JvmOverloads
 @Throws(JsonProcessingException::class)
-fun MessageRouter<EventBatch>.storeEvent(event: Event, parentEventID: String? = null) : Event {
+fun MessageRouter<EventBatch>.storeEvent(
+    event: Event,
+    parentEventId: EventID? = null
+): Event {
     try {
-        send(EventBatch.newBuilder().addEvents(event.toProto(toEventID(parentEventID, event.bookName))).build())
+        send(EventBatch.newBuilder().addEvents(event.toProto(parentEventId)).build())
     } catch (e: Exception) {
         throw RuntimeException("Event '" + event.id + "' store failure", e)
     }
@@ -48,21 +51,20 @@ fun MessageRouter<EventBatch>.storeEvent(event: Event, parentEventID: String? = 
 }
 
 /**
- * @param parentEventID the ID of the root parent that all events should be attached.
+ * @param parentEventId the ID of the root parent that all events should be attached.
  *                      If `null` the events will be stored as a root events (without attaching to any parent).
  * @param events events to store
  */
 @JvmOverloads
 @Throws(JsonProcessingException::class)
-fun MessageRouter<EventBatch>.storeEvents(parentEventID: String? = null, bookName: String, vararg events: Event) {
+fun MessageRouter<EventBatch>.storeEvents(parentEventId: EventID? = null, vararg events: Event) {
     try {
         val batchBuilder = EventBatch.newBuilder().apply {
-            if (parentEventID != null) {
-                setParentEventId(EventID.newBuilder().setId(parentEventID))
+            if (parentEventId != null) {
+                setParentEventId(parentEventId)
             }
-            val parentId = toEventID(parentEventID, bookName)
             for (event in events) {
-                addEvents(event.toProto(parentId))
+                addEvents(event.toProto(parentEventId))
             }
         }
         send(batchBuilder.build())

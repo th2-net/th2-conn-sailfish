@@ -130,7 +130,7 @@ public class MessageSender {
             if (parentId == null) {
                 eventDispatcher.store(EventHolder.createError(errorEvent));
             } else {
-                eventDispatcher.store(errorEvent, parentId.getId());
+                eventDispatcher.store(errorEvent, parentId);
             }
         } catch (IOException e) {
             logger.error("Cannot store event {} (parentId: {})", errorEvent.getId(), parentId, e);
