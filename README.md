@@ -1,4 +1,4 @@
-# Connect (3.9.0)
+# Connect (4.0.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -118,6 +118,10 @@ spec:
 ```
 
 ## Release notes
+
+### 4.0.0
+
++ Adaptation to books/pages cradleapi 4.0.0
 
 ### 3.9.0
 
