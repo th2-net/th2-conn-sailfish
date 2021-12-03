@@ -98,10 +98,7 @@ public class MessageSender {
 
     private void sendMessage(RawMessage protoMsg) throws InterruptedException {
         String parentEventBookName = protoMsg.getParentEventId().getBookName();
-        if (!parentEventBookName.isEmpty()
-                && !BoxConfiguration.DEFAULT_BOOK_NAME.equals(parentEventBookName)
-                && !parentEventBookName.equals(untrackedMessagesRoot.getBookName())
-        ) {
+        if (!parentEventBookName.isEmpty() && !parentEventBookName.equals(untrackedMessagesRoot.getBookName())) {
             storeErrorEvent(
                     createErrorEvent(String.format(
                             "Parent event book name is '%s' but should be '%s' for message with session alias '%s' and direction '%s'",
