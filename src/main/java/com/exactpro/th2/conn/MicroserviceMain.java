@@ -59,9 +59,9 @@ import com.exactpro.sf.externalapi.ISettingsProxy;
 import com.exactpro.sf.externalapi.ServiceFactory;
 import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
-import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
@@ -113,7 +113,6 @@ public class MicroserviceMain {
 
         File workspaceFolder = new File(configuration.getWorkspaceFolder());
 
-        Map<Direction, AtomicLong> directionToSequence = getActualSequences();
         int exitCode = 0;
 
         try {
@@ -136,33 +135,45 @@ public class MicroserviceMain {
 
             MessageRouter<EventBatch> eventBatchRouter = factory.getEventBatchRouter();
 
-            var rootEvent = Event.start().endTimestamp()
+            var rootEvent = Event.start()
+                    .bookName(factory.getBoxConfiguration().getBookName())
+                    .endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
                     .type("Microservice");
-            String rootEventID = storeEvent(eventBatchRouter, rootEvent).getId();
+            var rootEventId = storeEvent(eventBatchRouter, rootEvent).getEventId();
 
             var errorEventsRoot = Event.start().endTimestamp()
                     .name("Errors")
                     .type("ConnectivityErrors");
-            storeEvent(eventBatchRouter, errorEventsRoot, rootEventID);
+            storeEvent(eventBatchRouter, errorEventsRoot, rootEventId);
 
             var serviceEventsRoot = Event.start().endTimestamp()
                     .name("ServiceEvents")
                     .type("ConnectivityServiceEvents");
-            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
+            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventId);
 
             var untrackedSentMessages = Event.start().endTimestamp()
                     .name("UntrackedMessages")
                     .description("Contains messages that we send via this connectivity but does not have attacked parent event ID")
                     .type("ConnectivityUntrackedMessages");
-            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
+            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventId);
 
-            var eventDispatcher = EventDispatcher.createDispatcher(eventBatchRouter, rootEventID, Map.of(
-                    EventType.ERROR, errorEventsRoot.getId(),
-                    EventType.SERVICE_EVENT, serviceEventsRoot.getId()
-            ));
+            var eventDispatcher = EventDispatcher.createDispatcher(
+                    eventBatchRouter,
+                    rootEventId,
+                    Map.of(
+                            EventType.ERROR, errorEventsRoot.getEventId(),
+                            EventType.SERVICE_EVENT, serviceEventsRoot.getEventId()
+                    )
+            );
 
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, configuration.getSessionAlias(), processor, eventDispatcher);
+            IServiceListener serviceListener = new ServiceListener(
+                    getActualSequences(),
+                    () -> finalFactory.newMessageIDBuilder()
+                            .setConnectionId(ConnectionID.newBuilder().setSessionAlias(configuration.getSessionAlias())),
+                    processor,
+                    eventDispatcher
+            );
             IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             disposer.register(() -> {
                 LOGGER.info("Stop service proxy");
@@ -172,8 +183,11 @@ public class MicroserviceMain {
 
             MessageRouter<RawMessageBatch> rawMessageRouter = factory.getMessageRouterRawBatch();
 
-            MessageSender messageSender = new MessageSender(serviceProxy, rawMessageRouter, eventDispatcher,
-                    EventID.newBuilder().setId(untrackedSentMessages.getId()).build()
+            MessageSender messageSender = new MessageSender(
+                    serviceProxy,
+                    rawMessageRouter,
+                    eventDispatcher,
+                    factory.newEventIDBuilder().setId(untrackedSentMessages.getId()).build()
             );
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");
@@ -253,9 +267,9 @@ public class MicroserviceMain {
                         Event event = Event.start().endTimestamp()
                                 .name("Send '" + message.getName() + "' message")
                                 .type("Send message")
-                                .messageID(connectivityMessage.getMessageID());
+                                .messageID(connectivityMessage.getMessageId());
                         LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
-                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
+                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()));
                         sent = true;
                     }
                 });

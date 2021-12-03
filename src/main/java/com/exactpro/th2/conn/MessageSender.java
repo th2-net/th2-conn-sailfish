@@ -34,6 +34,7 @@ import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
+import com.exactpro.th2.common.schema.box.configuration.BoxConfiguration;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
 import com.exactpro.th2.conn.events.EventDispatcher;
@@ -96,6 +97,20 @@ public class MessageSender {
     }
 
     private void sendMessage(RawMessage protoMsg) throws InterruptedException {
+        String parentEventBookName = protoMsg.getParentEventId().getBookName();
+        if (!parentEventBookName.isEmpty() && !parentEventBookName.equals(untrackedMessagesRoot.getBookName())) {
+            storeErrorEvent(
+                    createErrorEvent(String.format(
+                            "Parent event book name is '%s' but should be '%s' for message with session alias '%s' and direction '%s'",
+                            parentEventBookName,
+                            untrackedMessagesRoot.getBookName(),
+                            protoMsg.getMetadata().getId().getConnectionId().getSessionAlias(),
+                            protoMsg.getMetadata().getId().getDirection()
+                    )).bookName(parentEventBookName),
+                    protoMsg.getParentEventId()
+            );
+            return;
+        }
         byte[] data = protoMsg.getBody().toByteArray();
         try {
             serviceProxy.sendRaw(data, toSailfishMetadata(protoMsg));
@@ -117,7 +132,7 @@ public class MessageSender {
             if (parentId == null) {
                 eventDispatcher.store(EventHolder.createError(errorEvent));
             } else {
-                eventDispatcher.store(errorEvent, parentId.getId());
+                eventDispatcher.store(errorEvent, parentId);
             }
         } catch (IOException e) {
             logger.error("Cannot store event {} (parentId: {})", errorEvent.getId(), parentId, e);

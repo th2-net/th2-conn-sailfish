@@ -25,10 +25,12 @@ import com.exactpro.sf.services.ServiceEvent.Level;
 import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
+import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.MessageID;
+import com.exactpro.th2.common.grpc.MessageID.Builder;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
-import com.exactpro.th2.common.grpc.Direction;
 
 import static com.exactpro.th2.common.grpc.Direction.FIRST;
 import static com.exactpro.th2.common.grpc.Direction.SECOND;
@@ -40,6 +42,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import org.reactivestreams.Subscriber;
 import org.slf4j.Logger;
@@ -73,18 +76,23 @@ public class ServiceListener implements IServiceListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceListener.class);
 
     private final Map<Direction, AtomicLong> directionToSequence;
+    private final Supplier<Builder> idBuilder;
+    private final String bookName;
     private final String sessionAlias;
     private final Subscriber<ConnectivityMessage> subscriber;
     private final EventDispatcher eventDispatcher;
 
     public ServiceListener(
             Map<Direction, AtomicLong> directionToSequence,
-            String sessionAlias,
+            Supplier<Builder> idBuilder,
             Subscriber<ConnectivityMessage> subscriber,
             EventDispatcher eventDispatcher
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
-        this.sessionAlias = requireNonNull(sessionAlias, "Session alias can't be null");
+        this.idBuilder = requireNonNull(idBuilder, "Message id builder can't be null");
+        Builder builder = idBuilder.get();
+        this.bookName = requireNonNull(builder.getBookName(), "Book name can't be null");
+        this.sessionAlias = requireNonNull(builder.getConnectionId().getSessionAlias(), "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
     }
@@ -108,7 +116,9 @@ public class ServiceListener implements IServiceListener {
     public void exceptionCaught(IServiceProxy service, Throwable cause) {
         LOGGER.error("Session '{}' threw exception", sessionAlias, cause);
         try {
-            Event event = Event.start().endTimestamp()
+            Event event = Event.start()
+                    .bookName(bookName)
+                    .endTimestamp()
                     .name("Connection error")
                     .status(Status.FAILED)
                     .type("Error");
@@ -126,16 +136,17 @@ public class ServiceListener implements IServiceListener {
         LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
         DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
-        AtomicLong directionSeq = directionToSequence.get(direction);
+        MessageID messageId = idBuilder.get()
+                .setDirection(direction)
+                .setSequence(directionToSequence.get(direction).incrementAndGet())
+                .build();
+
         ConnectivityMessage connectivityMessage;
-
         if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
-            EvolutionBatch batch = new EvolutionBatch(message);
-            connectivityMessage = createConnectivityMessage(batch.getBatch(), direction, directionSeq);
+            connectivityMessage = createConnectivityMessage(new EvolutionBatch(message).getBatch(), messageId);
         } else {
-            connectivityMessage = createConnectivityMessage(List.of(message), direction, directionSeq);
+            connectivityMessage = createConnectivityMessage(List.of(message), messageId);
         }
-
         subscriber.onNext(connectivityMessage);
     }
 
@@ -143,7 +154,9 @@ public class ServiceListener implements IServiceListener {
     public void onEvent(IServiceProxy service, ServiceEvent serviceEvent) {
         LOGGER.info("Session '{}' emitted service event '{}'", sessionAlias, serviceEvent);
         try {
-            Event event = Event.start().endTimestamp()
+            Event event = Event.start()
+                    .bookName(bookName)
+                    .endTimestamp()
                     .name(serviceEvent.getMessage())
                     .status(serviceEvent.getLevel() == Level.ERROR ? Status.FAILED : Status.PASSED)
                     .type("Service event")
@@ -156,9 +169,14 @@ public class ServiceListener implements IServiceListener {
     }
 
     @NonNull
-    private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, Direction direction, AtomicLong directionSeq) {
-        long sequence = directionSeq.incrementAndGet();
-        LOGGER.debug("On message: direction '{}'; sequence '{}'; messages '{}'", direction, sequence, messages);
-        return new ConnectivityMessage(messages, sessionAlias, direction, sequence);
+    private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, MessageID messageId) {
+        LOGGER.debug(
+                "On message: book name `{}`; direction '{}'; sequence '{}'; messages '{}'",
+                messageId.getBookName(),
+                messageId.getDirection(),
+                messageId.getSequence(),
+                messages
+        );
+        return new ConnectivityMessage(messages, messageId);
     }
 }

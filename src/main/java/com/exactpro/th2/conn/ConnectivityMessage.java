@@ -32,7 +32,6 @@ import org.slf4j.LoggerFactory;
 import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
-import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageID;
@@ -51,28 +50,28 @@ public class ConnectivityMessage {
 
     private final List<IMessage> sailfishMessages;
 
-    // This variables can be calculated in methods
-    private final MessageID messageID;
+    // These variables can be calculated in methods
+    private final MessageID messageId;
     private final Timestamp timestamp;
 
-    public ConnectivityMessage(List<IMessage> sailfishMessages, String sessionAlias, Direction direction, long sequence) {
-        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Message can't be null"));
+    public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID messageId) {
+        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Messages can't be null"));
         if (sailfishMessages.isEmpty()) {
-            throw new IllegalArgumentException("At least one sailfish messages must be passed. Session alias: " + sessionAlias + "; Direction: " + direction);
+            throw new IllegalArgumentException(String.format(
+                    "At least one sailfish message must be passed. Book name: %s; Session alias: %s; Direction: %s",
+                    messageId.getBookName(),
+                    messageId.getConnectionId().getSessionAlias(),
+                    messageId.getDirection())
+            );
         }
-        messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null")),
-                requireNonNull(direction, "Direction can't be null"), sequence);
+        this.messageId = requireNonNull(messageId, "Message id can't be null");
         timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
-    }
-
-    public String getSessionAlias() {
-        return messageID.getConnectionId().getSessionAlias();
     }
 
     public RawMessage convertToProtoRawMessage() {
         Builder builder = RawMessage.newBuilder();
 
-        RawMessageMetadata.Builder rawMessageMetadata = createRawMessageMetadataBuilder(messageID, timestamp);
+        RawMessageMetadata.Builder rawMessageMetadata = createRawMessageMetadataBuilder(messageId, timestamp);
         int totalSize = calculateTotalBodySize(sailfishMessages);
         if (totalSize == 0) {
             throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
@@ -86,7 +85,7 @@ public class ConnectivityMessage {
                 EventID parentEventID = SailfishMetadataExtensions.getParentEventID(sfMetadata);
                 // Should never happen because the Sailfish does not support sending multiple messages at once
                 if (builder.hasParentEventId()) {
-                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageID, builder.getParentEventId(), parentEventID);
+                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageId, builder.getParentEventId(), parentEventID);
                 }
                 builder.setParentEventId(parentEventID);
             }
@@ -106,16 +105,24 @@ public class ConnectivityMessage {
                         .build();
     }
 
-    public MessageID getMessageID() {
-        return messageID;
+    public MessageID getMessageId() {
+        return messageId;
     }
 
-    public long getSequence() {
-        return messageID.getSequence();
+    public String getBookName() {
+        return messageId.getBookName();
+    }
+    
+    public String getSessionAlias() {
+        return messageId.getConnectionId().getSessionAlias();
     }
 
     public Direction getDirection() {
-        return messageID.getDirection();
+        return messageId.getDirection();
+    }
+
+    public long getSequence() {
+        return messageId.getSequence();
     }
 
     public List<IMessage> getSailfishMessages() {
@@ -125,7 +132,7 @@ public class ConnectivityMessage {
     @Override
     public String toString() {
         return new ToStringBuilder(this)
-                .append("messageID", shortDebugString(messageID))
+                .append("messageId", shortDebugString(messageId))
                 .append("timestamp", shortDebugString(timestamp))
                 .append("sailfishMessages", sailfishMessages.stream().map(IMessage::getName).collect(Collectors.joining(", ")))
                 .toString();
@@ -139,23 +146,9 @@ public class ConnectivityMessage {
                 }).sum();
     }
 
-    private static ConnectionID createConnectionID(String sessionAlias) {
-        return ConnectionID.newBuilder()
-                .setSessionAlias(sessionAlias)
-                .build();
-    }
-
-    private static MessageID createMessageID(ConnectionID connectionId, Direction direction, long sequence) {
-        return MessageID.newBuilder()
-                .setConnectionId(connectionId)
-                .setDirection(direction)
-                .setSequence(sequence)
-                .build();
-    }
-
-    private static RawMessageMetadata.Builder createRawMessageMetadataBuilder(MessageID messageID, Timestamp timestamp) {
+    private static RawMessageMetadata.Builder createRawMessageMetadataBuilder(MessageID messageId, Timestamp timestamp) {
         return RawMessageMetadata.newBuilder()
-                .setId(messageID)
+                .setId(messageId)
                 .setTimestamp(timestamp);
     }
 

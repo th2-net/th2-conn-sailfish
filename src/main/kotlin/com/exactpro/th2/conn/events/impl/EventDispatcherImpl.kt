@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2020 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package com.exactpro.th2.conn.events.impl
 
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.common.grpc.EventBatch
+import com.exactpro.th2.common.grpc.EventID
 import com.exactpro.th2.common.schema.message.MessageRouter
 import com.exactpro.th2.conn.events.EventDispatcher
 import com.exactpro.th2.conn.events.EventType
@@ -27,8 +28,8 @@ import com.fasterxml.jackson.core.JsonProcessingException
 
 class EventDispatcherImpl(
     private val eventBatchRouter: MessageRouter<EventBatch>,
-    private val rootID: String,
-    private val parentIdByType: Map<EventType, String> = emptyMap()
+    private val rootId: EventID,
+    private val parentIdByType: Map<EventType, EventID> = emptyMap()
 ) : EventDispatcher {
     @Throws(JsonProcessingException::class)
     override fun store(eventHolder: EventHolder) {
@@ -36,11 +37,11 @@ class EventDispatcherImpl(
     }
 
     @Throws(JsonProcessingException::class)
-    override fun store(event: Event, parentId: String) {
+    override fun store(event: Event, parentId: EventID) {
         eventBatchRouter.storeEvent(event, parentId)
     }
 
-    private fun parentIdFor(type: EventType): String {
-        return parentIdByType[type] ?: rootID
+    private fun parentIdFor(type: EventType): EventID {
+        return parentIdByType[type] ?: rootId
     }
 }
