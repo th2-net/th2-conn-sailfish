@@ -121,7 +121,7 @@ spec:
 
 ### 4.0.0
 
-+ Adaptation to books/pages cradleapi 4.0.0
++ Migration to books/pages cradle 4.0.0
 
 ### 3.9.0
 
