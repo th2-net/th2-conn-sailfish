@@ -133,26 +133,37 @@ public class MicroserviceMain {
                 serviceFactory.close();
             });
 
+            String boxBookName = factory.getBoxConfiguration().getBookName();
             MessageRouter<EventBatch> eventBatchRouter = factory.getEventBatchRouter();
 
-            var rootEvent = Event.start()
-                    .bookName(factory.getBoxConfiguration().getBookName())
+            var rootEvent = Event
+                    .start()
+                    .bookName(boxBookName)
                     .endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
                     .type("Microservice");
             var rootEventId = storeEvent(eventBatchRouter, rootEvent).getEventId();
 
-            var errorEventsRoot = Event.start().endTimestamp()
+            var errorEventsRoot = Event
+                    .start()
+                    .bookName(boxBookName)
+                    .endTimestamp()
                     .name("Errors")
                     .type("ConnectivityErrors");
             storeEvent(eventBatchRouter, errorEventsRoot, rootEventId);
 
-            var serviceEventsRoot = Event.start().endTimestamp()
+            var serviceEventsRoot = Event
+                    .start()
+                    .bookName(boxBookName)
+                    .endTimestamp()
                     .name("ServiceEvents")
                     .type("ConnectivityServiceEvents");
             storeEvent(eventBatchRouter, serviceEventsRoot, rootEventId);
 
-            var untrackedSentMessages = Event.start().endTimestamp()
+            var untrackedSentMessages = Event
+                    .start()
+                    .bookName(boxBookName)
+                    .endTimestamp()
                     .name("UntrackedMessages")
                     .description("Contains messages that we send via this connectivity but does not have attacked parent event ID")
                     .type("ConnectivityUntrackedMessages");
@@ -194,9 +205,15 @@ public class MicroserviceMain {
                 messageSender.stop();
             });
 
-            createPipeline(processor, processor::onComplete, eventBatchRouter, rawMessageRouter,
-                    configuration.getMaxMessageBatchSize(), configuration.isEnableMessageSendingEvent())
-                    .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
+            createPipeline(
+                    processor,
+                    processor::onComplete,
+                    eventBatchRouter,
+                    rawMessageRouter,
+                    configuration.getMaxMessageBatchSize(),
+                    configuration.isEnableMessageSendingEvent(),
+                    boxBookName
+            ).blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
         } catch (IllegalArgumentException e) { LOGGER.error(e.getMessage(), e); exitCode = 4;
@@ -222,10 +239,14 @@ public class MicroserviceMain {
     }
 
     private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(
-            Flowable<ConnectivityMessage> flowable, Action terminateFlowable,
+            Flowable<ConnectivityMessage> flowable,
+            Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
             MessageRouter<RawMessageBatch> rawMessageRouter,
-            int maxMessageBatchSize, boolean enableMessageSendingEvent) {
+            int maxMessageBatchSize,
+            boolean enableMessageSendingEvent,
+            String boxBookName
+    ) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
         return flowable.observeOn(PIPELINE_SCHEDULER)
@@ -239,7 +260,7 @@ public class MicroserviceMain {
                             .refCount(enableMessageSendingEvent && direction == Direction.SECOND ? 2 : 1);
 
                     if (enableMessageSendingEvent && direction == Direction.SECOND) {
-                        subscribeToSendMessage(eventBatchRouter, messageConnectable);
+                        subscribeToSendMessage(eventBatchRouter, messageConnectable, boxBookName);
                     }
                     createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize);
 
@@ -247,7 +268,11 @@ public class MicroserviceMain {
                 });
     }
 
-    private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, Flowable<ConnectivityMessage> messageConnectable) {
+    private static void subscribeToSendMessage(
+            MessageRouter<EventBatch> eventBatchRouter,
+            Flowable<ConnectivityMessage> messageConnectable,
+            String boxBookName
+    ) {
         //noinspection ResultOfMethodCallIgnored
         messageConnectable
                 .subscribe(connectivityMessage -> {
@@ -264,7 +289,10 @@ public class MicroserviceMain {
                         if (sent) {
                             LOGGER.warn("The connectivity message has more than one sailfish message with parent event ID: {}", connectivityMessage);
                         }
-                        Event event = Event.start().endTimestamp()
+                        Event event = Event
+                                .start()
+                                .bookName(boxBookName)
+                                .endTimestamp()
                                 .name("Send '" + message.getName() + "' message")
                                 .type("Send message")
                                 .messageID(connectivityMessage.getMessageId());
