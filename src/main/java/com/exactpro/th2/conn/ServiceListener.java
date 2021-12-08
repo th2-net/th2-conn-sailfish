@@ -116,7 +116,8 @@ public class ServiceListener implements IServiceListener {
     public void exceptionCaught(IServiceProxy service, Throwable cause) {
         LOGGER.error("Session '{}' threw exception", sessionAlias, cause);
         try {
-            Event event = Event.start()
+            Event event = Event
+                    .start()
                     .bookName(bookName)
                     .endTimestamp()
                     .name("Connection error")
@@ -154,7 +155,8 @@ public class ServiceListener implements IServiceListener {
     public void onEvent(IServiceProxy service, ServiceEvent serviceEvent) {
         LOGGER.info("Session '{}' emitted service event '{}'", sessionAlias, serviceEvent);
         try {
-            Event event = Event.start()
+            Event event = Event
+                    .start()
                     .bookName(bookName)
                     .endTimestamp()
                     .name(serviceEvent.getMessage())
