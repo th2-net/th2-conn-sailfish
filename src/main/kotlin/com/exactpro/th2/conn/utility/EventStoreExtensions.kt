@@ -18,7 +18,6 @@ package com.exactpro.th2.conn.utility
 
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.common.event.EventUtils
-import com.exactpro.th2.common.event.EventUtils.toEventID
 import com.exactpro.th2.common.event.IBodyData
 import com.exactpro.th2.common.grpc.EventBatch
 import com.exactpro.th2.common.grpc.EventID
@@ -35,36 +34,66 @@ import mu.KotlinLogging
 
 private val LOGGER = KotlinLogging.logger { }
 
-@JvmOverloads
 @Throws(JsonProcessingException::class)
 fun MessageRouter<EventBatch>.storeEvent(
     event: Event,
-    parentEventId: EventID? = null
-): Event {
+    parentEventId: EventID,
+) = storeEvent(event, parentEventId.bookName)
+
+@Throws(JsonProcessingException::class)
+fun MessageRouter<EventBatch>.storeEvent(
+    event: Event,
+    bookName: String,
+): EventID {
     try {
-        send(EventBatch.newBuilder().addEvents(event.toProto(parentEventId)).build())
+        val protoEvent = event.toProto(bookName)
+        send(EventBatch.newBuilder().addEvents(protoEvent).build())
+        LOGGER.debug("Event {} sent", event.id)
+        return protoEvent.id
     } catch (e: Exception) {
         throw RuntimeException("Event '" + event.id + "' store failure", e)
     }
-    LOGGER.debug("Event {} sent", event.id)
-    return event
 }
 
 /**
- * @param parentEventId the ID of the root parent that all events should be attached.
- *                      If `null` the events will be stored as a root events (without attaching to any parent).
+ * @param bookName the book name of the root parent that all events should be attached.
+ *                 Events will be stored as a root events (without attaching to any parent).
  * @param events events to store
  */
-@JvmOverloads
 @Throws(JsonProcessingException::class)
-fun MessageRouter<EventBatch>.storeEvents(parentEventId: EventID? = null, vararg events: Event) {
+fun MessageRouter<EventBatch>.storeEvents(
+    bookName: String,
+    vararg events: Event,
+) = internalStoreEvents(
+    EventBatch.newBuilder(),
+    bookName,
+    *events
+)
+
+/**
+ * @param parentEventId the ID of the root parent that all events should be attached.
+ * @param events events to store
+ */
+@Throws(JsonProcessingException::class)
+fun MessageRouter<EventBatch>.storeEvents(
+    parentEventId: EventID,
+    vararg events: Event,
+) = internalStoreEvents(
+    EventBatch.newBuilder().setParentEventId(parentEventId),
+    parentEventId.bookName,
+    *events
+)
+
+@Throws(JsonProcessingException::class)
+private fun MessageRouter<EventBatch>.internalStoreEvents(
+    batchBuilder: EventBatch.Builder,
+    bookName: String,
+    vararg events: Event,
+) {
     try {
-        val batchBuilder = EventBatch.newBuilder().apply {
-            if (parentEventId != null) {
-                setParentEventId(parentEventId)
-            }
+        batchBuilder.apply {
             for (event in events) {
-                addEvents(event.toProto(parentEventId))
+                addEvents(event.toProto(bookName))
             }
         }
         send(batchBuilder.build())

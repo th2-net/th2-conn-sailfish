@@ -59,7 +59,6 @@ class TestConnectivityMessage {
                 .setConnectionId(ConnectionID.newBuilder().setSessionAlias(sessionAlias))
                 .setDirection(direction)
                 .setSequence(sequence)
-                .build()
         )
 
         val rawMessage: RawMessage = connectivityMessage.convertToProtoRawMessage()

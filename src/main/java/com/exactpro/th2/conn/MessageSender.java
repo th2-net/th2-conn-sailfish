@@ -97,7 +97,8 @@ public class MessageSender {
     }
 
     private void sendMessage(RawMessage protoMsg) throws InterruptedException {
-        String parentEventBookName = protoMsg.getParentEventId().getBookName();
+        EventID parentEventId = protoMsg.getParentEventId();
+        String parentEventBookName = parentEventId.getBookName();
         if (!parentEventBookName.isEmpty() && !parentEventBookName.equals(untrackedMessagesRoot.getBookName())) {
             storeErrorEvent(
                     createErrorEvent(String.format(
@@ -106,8 +107,8 @@ public class MessageSender {
                             untrackedMessagesRoot.getBookName(),
                             protoMsg.getMetadata().getId().getConnectionId().getSessionAlias(),
                             protoMsg.getMetadata().getId().getDirection()
-                    )).bookName(parentEventBookName),
-                    protoMsg.getParentEventId()
+                    )),
+                    parentEventId
             );
             return;
         }
@@ -122,7 +123,7 @@ public class MessageSender {
                     .bodyData(EventUtils.createMessageBean("Cannot send message. Message body in base64:"))
                     .bodyData(EventUtils.createMessageBean(Base64.getEncoder().encodeToString(data)));
             EventStoreExtensions.addException(errorEvent, ex);
-            storeErrorEvent(errorEvent, protoMsg.hasParentEventId() ? protoMsg.getParentEventId() : null);
+            storeErrorEvent(errorEvent, protoMsg.hasParentEventId() ? parentEventId : null);
             throw ex;
         }
     }
