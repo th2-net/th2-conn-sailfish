@@ -33,6 +33,7 @@ import com.exactpro.th2.conn.utility.EventStoreExtensions;
 
 import static com.exactpro.th2.common.grpc.Direction.FIRST;
 import static com.exactpro.th2.common.grpc.Direction.SECOND;
+import static com.google.protobuf.TextFormat.shortDebugString;
 import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
@@ -167,10 +168,8 @@ public class ServiceListener implements IServiceListener {
     @NonNull
     private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, MessageID.Builder messageIdBuilder) {
         LOGGER.debug(
-                "On message: book name `{}`; direction '{}'; sequence '{}'; messages '{}'",
-                messageIdBuilder.getBookName(),
-                messageIdBuilder.getDirection(),
-                messageIdBuilder.getSequence(),
+                "On message: message id '{}'; messages '{}'",
+                shortDebugString(messageIdBuilder),
                 messages
         );
         return new ConnectivityMessage(messages, messageIdBuilder);

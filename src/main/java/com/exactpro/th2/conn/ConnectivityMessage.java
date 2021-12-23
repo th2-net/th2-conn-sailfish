@@ -52,11 +52,9 @@ public class ConnectivityMessage {
         this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Messages can't be null"));
         if (sailfishMessages.isEmpty()) {
             throw new IllegalArgumentException(String.format(
-                    "At least one sailfish message must be passed. Book name: %s; Session alias: %s; Direction: %s",
-                    messageIdBuilder.getBookName(),
-                    messageIdBuilder.getConnectionId().getSessionAlias(),
-                    messageIdBuilder.getDirection())
-            );
+                    "At least one sailfish message must be passed. Message id: '%s'",
+                    shortDebugString(messageIdBuilder)
+            ));
         }
         this.messageId = requireNonNull(messageIdBuilder, "Message id builder can't be null")
                 .setTimestamp(toTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().toInstant()))
