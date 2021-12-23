@@ -38,22 +38,40 @@ private val LOGGER = KotlinLogging.logger { }
 fun MessageRouter<EventBatch>.storeEvent(
     event: Event,
     parentEventId: EventID,
-) = storeEvent(event, parentEventId.bookName)
+) = storeEvent(event.toProto(parentEventId))
 
 @Throws(JsonProcessingException::class)
 fun MessageRouter<EventBatch>.storeEvent(
     event: Event,
     bookName: String,
+) = storeEvent(event.toProto(bookName))
+
+@Throws(JsonProcessingException::class)
+private fun MessageRouter<EventBatch>.storeEvent(
+    protoEvent: com.exactpro.th2.common.grpc.Event,
 ): EventID {
     try {
-        val protoEvent = event.toProto(bookName)
         send(EventBatch.newBuilder().addEvents(protoEvent).build())
-        LOGGER.debug("Event {} sent", event.id)
-        return protoEvent.id
     } catch (e: Exception) {
-        throw RuntimeException("Event '" + event.id + "' store failure", e)
+        throw RuntimeException("Event '${protoEvent.id.id}' store failure", e)
     }
+    LOGGER.debug("Event {} sent", protoEvent.id.id)
+    return protoEvent.id
 }
+
+/**
+ * @param parentEventId the ID of the root parent that all events should be attached.
+ * @param events events to store
+ */
+@Throws(JsonProcessingException::class)
+fun MessageRouter<EventBatch>.storeEvents(
+    parentEventId: EventID,
+    vararg events: Event,
+) = storeEvents(
+    EventBatch.newBuilder().setParentEventId(parentEventId),
+    { event -> event.toProto(parentEventId) },
+    *events
+)
 
 /**
  * @param bookName the book name of the root parent that all events should be attached.
@@ -64,41 +82,27 @@ fun MessageRouter<EventBatch>.storeEvent(
 fun MessageRouter<EventBatch>.storeEvents(
     bookName: String,
     vararg events: Event,
-) = internalStoreEvents(
+) = storeEvents(
     EventBatch.newBuilder(),
-    bookName,
-    *events
-)
-
-/**
- * @param parentEventId the ID of the root parent that all events should be attached.
- * @param events events to store
- */
-@Throws(JsonProcessingException::class)
-fun MessageRouter<EventBatch>.storeEvents(
-    parentEventId: EventID,
-    vararg events: Event,
-) = internalStoreEvents(
-    EventBatch.newBuilder().setParentEventId(parentEventId),
-    parentEventId.bookName,
+    { event -> event.toProto(bookName) },
     *events
 )
 
 @Throws(JsonProcessingException::class)
-private fun MessageRouter<EventBatch>.internalStoreEvents(
+private fun MessageRouter<EventBatch>.storeEvents(
     batchBuilder: EventBatch.Builder,
-    bookName: String,
+    toProto: (Event) -> com.exactpro.th2.common.grpc.Event,
     vararg events: Event,
 ) {
     try {
         batchBuilder.apply {
             for (event in events) {
-                addEvents(event.toProto(bookName))
+                addEvents(toProto(event))
             }
         }
         send(batchBuilder.build())
     } catch (e: Exception) {
-        throw RuntimeException("Events '" + events.map { it.id } + "' store failure", e)
+        throw RuntimeException("Events '${events.map { it.id }}' store failure", e)
     }
     LOGGER.debug("Events {} sent", events.map { it.id })
 }
