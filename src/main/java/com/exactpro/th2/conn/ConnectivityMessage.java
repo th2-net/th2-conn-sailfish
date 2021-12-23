@@ -49,14 +49,16 @@ public class ConnectivityMessage {
     private final MessageID messageId;
 
     public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID.Builder messageIdBuilder) {
-        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Messages can't be null"));
+        requireNonNull(sailfishMessages, "Messages can't be null");
+        requireNonNull(messageIdBuilder, "Message id builder can't be null");
         if (sailfishMessages.isEmpty()) {
             throw new IllegalArgumentException(String.format(
                     "At least one sailfish message must be passed. Message id: '%s'",
                     shortDebugString(messageIdBuilder)
             ));
         }
-        this.messageId = requireNonNull(messageIdBuilder, "Message id builder can't be null")
+        this.sailfishMessages = Collections.unmodifiableList(sailfishMessages);
+        this.messageId = messageIdBuilder
                 .setTimestamp(toTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().toInstant()))
                 .build();
     }
