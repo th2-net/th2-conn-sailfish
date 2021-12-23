@@ -27,13 +27,13 @@ import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.MessageID;
-import com.exactpro.th2.common.grpc.MessageID.Builder;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
 
 import static com.exactpro.th2.common.grpc.Direction.FIRST;
 import static com.exactpro.th2.common.grpc.Direction.SECOND;
+import static com.google.protobuf.TextFormat.shortDebugString;
 import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
@@ -76,22 +76,20 @@ public class ServiceListener implements IServiceListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceListener.class);
 
     private final Map<Direction, AtomicLong> directionToSequence;
-    private final Supplier<Builder> idBuilder;
-    private final String bookName;
+    private final Supplier<MessageID.Builder> idBuilder;
     private final String sessionAlias;
     private final Subscriber<ConnectivityMessage> subscriber;
     private final EventDispatcher eventDispatcher;
 
     public ServiceListener(
             Map<Direction, AtomicLong> directionToSequence,
-            Supplier<Builder> idBuilder,
+            Supplier<MessageID.Builder> idBuilder,
             Subscriber<ConnectivityMessage> subscriber,
             EventDispatcher eventDispatcher
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.idBuilder = requireNonNull(idBuilder, "Message id builder can't be null");
-        Builder builder = idBuilder.get();
-        this.bookName = requireNonNull(builder.getBookName(), "Book name can't be null");
+        MessageID.Builder builder = idBuilder.get();
         this.sessionAlias = requireNonNull(builder.getConnectionId().getSessionAlias(), "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
@@ -118,7 +116,6 @@ public class ServiceListener implements IServiceListener {
         try {
             Event event = Event
                     .start()
-                    .bookName(bookName)
                     .endTimestamp()
                     .name("Connection error")
                     .status(Status.FAILED)
@@ -137,16 +134,15 @@ public class ServiceListener implements IServiceListener {
         LOGGER.debug("Handle message - route: {}; message: {}", route, message);
         Direction direction = route.isFrom() ? FIRST : SECOND;
         DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
-        MessageID messageId = idBuilder.get()
+        MessageID.Builder messageIdBuilder = idBuilder.get()
                 .setDirection(direction)
-                .setSequence(directionToSequence.get(direction).incrementAndGet())
-                .build();
+                .setSequence(directionToSequence.get(direction).incrementAndGet());
 
         ConnectivityMessage connectivityMessage;
         if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
-            connectivityMessage = createConnectivityMessage(new EvolutionBatch(message).getBatch(), messageId);
+            connectivityMessage = createConnectivityMessage(new EvolutionBatch(message).getBatch(), messageIdBuilder);
         } else {
-            connectivityMessage = createConnectivityMessage(List.of(message), messageId);
+            connectivityMessage = createConnectivityMessage(List.of(message), messageIdBuilder);
         }
         subscriber.onNext(connectivityMessage);
     }
@@ -157,7 +153,6 @@ public class ServiceListener implements IServiceListener {
         try {
             Event event = Event
                     .start()
-                    .bookName(bookName)
                     .endTimestamp()
                     .name(serviceEvent.getMessage())
                     .status(serviceEvent.getLevel() == Level.ERROR ? Status.FAILED : Status.PASSED)
@@ -171,14 +166,12 @@ public class ServiceListener implements IServiceListener {
     }
 
     @NonNull
-    private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, MessageID messageId) {
+    private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, MessageID.Builder messageIdBuilder) {
         LOGGER.debug(
-                "On message: book name `{}`; direction '{}'; sequence '{}'; messages '{}'",
-                messageId.getBookName(),
-                messageId.getDirection(),
-                messageId.getSequence(),
+                "On message: message id '{}'; messages '{}'",
+                shortDebugString(messageIdBuilder),
                 messages
         );
-        return new ConnectivityMessage(messages, messageId);
+        return new ConnectivityMessage(messages, messageIdBuilder);
     }
 }

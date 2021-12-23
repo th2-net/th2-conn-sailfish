@@ -16,6 +16,7 @@
 package com.exactpro.th2.conn;
 
 import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
+import static com.exactpro.th2.common.event.EventUtils.toTimestamp;
 import static com.google.protobuf.TextFormat.shortDebugString;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
@@ -36,47 +37,40 @@ import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.grpc.RawMessage;
-import com.exactpro.th2.common.grpc.RawMessage.Builder;
 import com.exactpro.th2.common.grpc.RawMessageMetadata;
 import com.exactpro.th2.conn.utility.MetadataProperty;
 import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.Timestamp;
 
 public class ConnectivityMessage {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityMessage.class);
-    public static final long MILLISECONDS_IN_SECOND = 1_000L;
-    public static final long NANOSECONDS_IN_MILLISECOND = 1_000_000L;
 
     private final List<IMessage> sailfishMessages;
-
-    // These variables can be calculated in methods
     private final MessageID messageId;
-    private final Timestamp timestamp;
 
-    public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID messageId) {
-        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Messages can't be null"));
+    public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID.Builder messageIdBuilder) {
+        requireNonNull(sailfishMessages, "Messages can't be null");
+        requireNonNull(messageIdBuilder, "Message id builder can't be null");
         if (sailfishMessages.isEmpty()) {
             throw new IllegalArgumentException(String.format(
-                    "At least one sailfish message must be passed. Book name: %s; Session alias: %s; Direction: %s",
-                    messageId.getBookName(),
-                    messageId.getConnectionId().getSessionAlias(),
-                    messageId.getDirection())
-            );
+                    "At least one sailfish message must be passed. Message id: '%s'",
+                    shortDebugString(messageIdBuilder)
+            ));
         }
-        this.messageId = requireNonNull(messageId, "Message id can't be null");
-        timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
+        this.sailfishMessages = Collections.unmodifiableList(sailfishMessages);
+        this.messageId = messageIdBuilder
+                .setTimestamp(toTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().toInstant()))
+                .build();
     }
 
     public RawMessage convertToProtoRawMessage() {
-        Builder builder = RawMessage.newBuilder();
-
-        RawMessageMetadata.Builder rawMessageMetadata = createRawMessageMetadataBuilder(messageId, timestamp);
         int totalSize = calculateTotalBodySize(sailfishMessages);
         if (totalSize == 0) {
             throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
         }
 
+        RawMessage.Builder rawMessageBuilder = RawMessage.newBuilder();
+        RawMessageMetadata.Builder rawMessageMetadataBuilder = RawMessageMetadata.newBuilder().setId(messageId);
         byte[] bodyData = new byte[totalSize];
         int index = 0;
         for (IMessage message : sailfishMessages) {
@@ -84,12 +78,12 @@ public class ConnectivityMessage {
             if (SailfishMetadataExtensions.contains(sfMetadata, MetadataProperty.PARENT_EVENT_ID)) {
                 EventID parentEventID = SailfishMetadataExtensions.getParentEventID(sfMetadata);
                 // Should never happen because the Sailfish does not support sending multiple messages at once
-                if (builder.hasParentEventId()) {
-                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageId, builder.getParentEventId(), parentEventID);
+                if (rawMessageBuilder.hasParentEventId()) {
+                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageId, rawMessageBuilder.getParentEventId(), parentEventID);
                 }
-                builder.setParentEventId(parentEventID);
+                rawMessageBuilder.setParentEventId(parentEventID);
             }
-            rawMessageMetadata.putAllProperties(defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap()));
+            rawMessageMetadataBuilder.putAllProperties(defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap()));
 
             byte[] rawMessage = MetadataExtensions.getRawMessage(sfMetadata);
             if (rawMessage == null) {
@@ -100,9 +94,9 @@ public class ConnectivityMessage {
             index += rawMessage.length;
         }
 
-        return builder.setMetadata(rawMessageMetadata)
-                        .setBody(ByteString.copyFrom(bodyData))
-                        .build();
+        return rawMessageBuilder.setMetadata(rawMessageMetadataBuilder)
+                .setBody(ByteString.copyFrom(bodyData))
+                .build();
     }
 
     public MessageID getMessageId() {
@@ -133,7 +127,6 @@ public class ConnectivityMessage {
     public String toString() {
         return new ToStringBuilder(this)
                 .append("messageId", shortDebugString(messageId))
-                .append("timestamp", shortDebugString(timestamp))
                 .append("sailfishMessages", sailfishMessages.stream().map(IMessage::getName).collect(Collectors.joining(", ")))
                 .toString();
     }
@@ -144,19 +137,5 @@ public class ConnectivityMessage {
                     byte[] rawMessage = MetadataExtensions.getRawMessage(it.getMetaData());
                     return rawMessage == null ? 0 : rawMessage.length;
                 }).sum();
-    }
-
-    private static RawMessageMetadata.Builder createRawMessageMetadataBuilder(MessageID messageId, Timestamp timestamp) {
-        return RawMessageMetadata.newBuilder()
-                .setId(messageId)
-                .setTimestamp(timestamp);
-    }
-
-    // TODO: Required nanosecond accuracy
-    private static Timestamp createTimestamp(long milliseconds) {
-        return Timestamp.newBuilder()
-                .setSeconds(milliseconds / MILLISECONDS_IN_SECOND)
-                .setNanos((int) (milliseconds % MILLISECONDS_IN_SECOND * NANOSECONDS_IN_MILLISECOND))
-                .build();
     }
 }
