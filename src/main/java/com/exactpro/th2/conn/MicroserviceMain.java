@@ -220,6 +220,11 @@ public class MicroserviceMain {
                 .map(group -> {
                     @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
                     Flowable<ConnectivityMessage> messageConnectable = group
+                            .doOnNext(message -> LOGGER.trace(
+                                    "Message inside map with sequence {} and direction {}",
+                                    message.getSequence(),
+                                    message.getDirection()
+                            ))
                             .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
                             .publish()
                             .refCount(enableMessageSendingEvent && direction == Direction.SECOND ? 2 : 1);
@@ -266,6 +271,11 @@ public class MicroserviceMain {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
+                .doOnNext(message -> LOGGER.trace(
+                        "Message before window with sequence {} and direction {}",
+                        message.getSequence(),
+                        message.getDirection()
+                ))
                 .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, maxMessageBatchSize)
                 .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
