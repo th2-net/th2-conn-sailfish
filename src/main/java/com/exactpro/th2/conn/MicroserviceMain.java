@@ -214,7 +214,13 @@ public class MicroserviceMain {
             int maxMessageBatchSize, boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-        return flowable.observeOn(PIPELINE_SCHEDULER)
+        return flowable
+                .doOnNext(message -> LOGGER.trace(
+                        "Message before observeOn with sequence {} and direction {}",
+                        message.getSequence(),
+                        message.getDirection()
+                ))
+                .observeOn(PIPELINE_SCHEDULER)
                 .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
                 .groupBy(ConnectivityMessage::getDirection)
                 .map(group -> {
