@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,21 +84,27 @@ public class ConnectivityBatch {
             throw new IllegalArgumentException("List " + iMessages + " has elements with incorrect metadata, expected session alias '"+ sessionAlias +"' direction '" + direction + '\'');
         }
 
+        boolean sequencesUnordered = false;
         List<Long> missedSequences = new ArrayList<>();
         for (int index = 0; index < iMessages.size() - 1; index++) {
-            for (long sequence = iMessages.get(index).getSequence() + 1; sequence < iMessages.get(index + 1).getSequence(); sequence++) {
-                missedSequences.add(sequence);
+            long nextExpectedSequence = iMessages.get(index).getSequence() + 1;
+            long nextSequence = iMessages.get(index + 1).getSequence();
+            if (nextExpectedSequence != nextSequence) {
+                sequencesUnordered = true;
             }
+            LongStream.range(nextExpectedSequence, nextSequence).forEach(missedSequences::add);
         }
-        if (LOGGER.isErrorEnabled() && !missedSequences.isEmpty()) {
+        if (LOGGER.isErrorEnabled() && sequencesUnordered) {
             LOGGER.error(
-                    "List {} hasn't elements with incremental sequence with one step for session alias '{}' and direction '{}'. Missed sequences {}",
+                    "List {} hasn't elements with incremental sequence with one step for session alias '{}' and direction '{}'{}",
                     iMessages.stream()
                             .map(ConnectivityMessage::getSequence)
                             .collect(Collectors.toList()),
                     sessionAlias,
                     direction,
-                    missedSequences
+                    missedSequences.isEmpty()
+                            ? ""
+                            : String.format(". Missed sequences %s", missedSequences)
             );
         }
 
