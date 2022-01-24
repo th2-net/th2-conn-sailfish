@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.exceptions.Exceptions;
 import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
-import io.reactivex.rxjava3.processors.UnicastProcessor;
+import io.reactivex.rxjava3.processors.PublishProcessor;
 import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 
 public class MicroserviceMain {
@@ -122,7 +122,7 @@ public class MicroserviceMain {
                 PIPELINE_SCHEDULER.shutdown();
             });
 
-            FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
+            FlowableProcessor<ConnectivityMessage> processor = PublishProcessor.create();
             disposer.register(() -> {
                 LOGGER.info("Complite pipeline publisher");
                 processor.onComplete();
@@ -220,6 +220,7 @@ public class MicroserviceMain {
                         message.getSequence(),
                         message.getDirection()
                 ))
+                .onBackpressureBuffer()
                 .observeOn(PIPELINE_SCHEDULER)
                 .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
                 .groupBy(ConnectivityMessage::getDirection)
