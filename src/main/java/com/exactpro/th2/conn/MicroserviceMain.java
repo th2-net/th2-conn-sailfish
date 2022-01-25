@@ -77,7 +77,7 @@ import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.exceptions.Exceptions;
 import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
-import io.reactivex.rxjava3.processors.PublishProcessor;
+import io.reactivex.rxjava3.processors.UnicastProcessor;
 import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 
 public class MicroserviceMain {
@@ -122,7 +122,7 @@ public class MicroserviceMain {
                 PIPELINE_SCHEDULER.shutdown();
             });
 
-            FlowableProcessor<ConnectivityMessage> processor = PublishProcessor.create();
+            FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.<ConnectivityMessage>create().toSerialized();
             disposer.register(() -> {
                 LOGGER.info("Complite pipeline publisher");
                 processor.onComplete();
@@ -220,7 +220,6 @@ public class MicroserviceMain {
                         message.getSequence(),
                         message.getDirection()
                 ))
-                .onBackpressureBuffer()
                 .observeOn(PIPELINE_SCHEDULER)
                 .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
                 .groupBy(ConnectivityMessage::getDirection)
