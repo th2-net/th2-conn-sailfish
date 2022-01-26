@@ -122,7 +122,7 @@ public class MicroserviceMain {
                 PIPELINE_SCHEDULER.shutdown();
             });
 
-            FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.<ConnectivityMessage>create().toSerialized();
+            FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
             disposer.register(() -> {
                 LOGGER.info("Complite pipeline publisher");
                 processor.onComplete();
