@@ -92,7 +92,9 @@ public class ConnectivityBatch {
             if (nextExpectedSequence != nextSequence) {
                 sequencesUnordered = true;
             }
-            LongStream.range(nextExpectedSequence, nextSequence).forEach(missedSequences::add);
+            if (LOGGER.isErrorEnabled()) {
+                LongStream.range(nextExpectedSequence, nextSequence).forEach(missedSequences::add);
+            }
         }
         if (LOGGER.isErrorEnabled() && sequencesUnordered) {
             LOGGER.error(
