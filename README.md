@@ -121,7 +121,7 @@ spec:
 
 ### 3.10.0
 
-+ Use `SerializedProcessor` for thread-safe because old processor sometimes missed some sequences
++ Added synchronization by processor to `ServiceListener.onMessage()` otherwise processor sometimes misses some sequences
 + Added log about missed sequences
 
 ### 3.9.0
