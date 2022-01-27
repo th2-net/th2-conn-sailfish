@@ -123,6 +123,7 @@ spec:
 
 + Added synchronization by processor to `ServiceListener.onMessage()` otherwise processor sometimes misses some sequences
 + Added log about missed sequences
++ Added trace log to flowable processor
 
 ### 3.9.0
 
