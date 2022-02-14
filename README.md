@@ -123,6 +123,9 @@ spec:
 
 + Update `sailfish-core` version from `3.2.1674` to `3.2.1741`
   + Add exception for checking the property in `IMetadata`
++ Added synchronization by processor to `ServiceListener.onMessage()` otherwise processor sometimes misses some sequences
++ Added log about missed sequences
++ Added trace log to flowable processor 
 
 ### 3.9.0
 
