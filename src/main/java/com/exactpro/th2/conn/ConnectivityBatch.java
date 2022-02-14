@@ -85,42 +85,34 @@ public class ConnectivityBatch {
         }
 
         if (LOGGER.isErrorEnabled()) {
-            checkForUnorderedSequences(iMessages, sessionAlias, direction);
+            boolean sequencesUnordered = false;
+            List<Long> missedSequences = new ArrayList<>();
+            for (int index = 0; index < iMessages.size() - 1; index++) {
+                long nextExpectedSequence = iMessages.get(index).getSequence() + 1;
+                long nextSequence = iMessages.get(index + 1).getSequence();
+                if (nextExpectedSequence != nextSequence) {
+                    sequencesUnordered = true;
+                }
+                LongStream.range(nextExpectedSequence, nextSequence).forEach(missedSequences::add);
+            }
+            if (sequencesUnordered) {
+                LOGGER.error(
+                        "List {} hasn't elements with incremental sequence with one step for session alias '{}' and direction '{}'{}",
+                        iMessages.stream()
+                                .map(ConnectivityMessage::getSequence)
+                                .collect(Collectors.toList()),
+                        sessionAlias,
+                        direction,
+                        missedSequences.isEmpty()
+                                ? ""
+                                : String.format(". Missed sequences %s", missedSequences)
+                );
+            }
         }
 
             // FIXME: Replace logging to thowing exception after solving message reordering problem
 //            throw new IllegalArgumentException("List " + iMessages.stream()
 //                    .map(ConnectivityMessage::getSequence)
 //                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");
-    }
-
-    private static void checkForUnorderedSequences(
-            List<ConnectivityMessage> iMessages,
-            String sessionAlias,
-            Direction direction
-    ) {
-        boolean sequencesUnordered = false;
-        List<Long> missedSequences = new ArrayList<>();
-        for (int index = 0; index < iMessages.size() - 1; index++) {
-            long nextExpectedSequence = iMessages.get(index).getSequence() + 1;
-            long nextSequence = iMessages.get(index + 1).getSequence();
-            if (nextExpectedSequence != nextSequence) {
-                sequencesUnordered = true;
-                LongStream.range(nextExpectedSequence, nextSequence).forEach(missedSequences::add);
-            }
-        }
-        if (sequencesUnordered) {
-            LOGGER.error(
-                    "List {} hasn't elements with incremental sequence with one step for session alias '{}' and direction '{}'{}",
-                    iMessages.stream()
-                            .map(ConnectivityMessage::getSequence)
-                            .collect(Collectors.toList()),
-                    sessionAlias,
-                    direction,
-                    missedSequences.isEmpty()
-                            ? ""
-                            : String.format(". Missed sequences %s", missedSequences)
-            );
-        }
     }
 }
