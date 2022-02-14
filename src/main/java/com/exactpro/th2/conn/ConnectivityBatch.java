@@ -15,17 +15,17 @@
  */
 package com.exactpro.th2.conn;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.stream.LongStream;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
+
+import static com.exactpro.th2.conn.utility.ConnectivityMessageExtensionsKt.checkAliasAndDirection;
+import static com.exactpro.th2.conn.utility.ConnectivityMessageExtensionsKt.checkForUnorderedSequences;
 
 public class ConnectivityBatch {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityBatch.class);
@@ -43,8 +43,20 @@ public class ConnectivityBatch {
         ConnectivityMessage firstMessage = connectivityMessages.get(0);
         this.sessionAlias = firstMessage.getSessionAlias();
         this.direction = firstMessage.getDirection();
-        checkMessages(connectivityMessages, sessionAlias, direction);
 
+        checkAliasAndDirection(connectivityMessages, sessionAlias, direction);
+
+        if (LOGGER.isErrorEnabled()) {
+            try {
+                checkForUnorderedSequences(connectivityMessages);
+            } catch (IllegalStateException e) {
+                LOGGER.error("Element`s sequence validation error for session alias '{}' and direction '{}': {}", sessionAlias, direction, e.getMessage());
+            }
+            // FIXME: Replace logging to thowing exception after solving message reordering problem
+            //            throw new IllegalArgumentException("List " + iMessages.stream()
+            //                    .map(ConnectivityMessage::getSequence)
+            //                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");
+        }
         this.connectivityMessages = List.copyOf(connectivityMessages);
         this.sequence = firstMessage.getSequence();
     }
@@ -73,54 +85,4 @@ public class ConnectivityBatch {
         return connectivityMessages;
     }
 
-    private static void checkMessages(List<ConnectivityMessage> iMessages, String sessionAlias, Direction direction) {
-        if (iMessages.isEmpty()) {
-            throw new IllegalArgumentException("List can't be empty");
-        }
-
-        if (!iMessages.stream()
-                .allMatch(iMessage -> Objects.equals(sessionAlias, iMessage.getSessionAlias())
-                        && direction == iMessage.getDirection())) {
-            throw new IllegalArgumentException("List " + iMessages + " has elements with incorrect metadata, expected session alias '"+ sessionAlias +"' direction '" + direction + '\'');
-        }
-
-        if (LOGGER.isErrorEnabled()) {
-            checkForUnorderedSequences(iMessages, sessionAlias, direction);
-        }
-
-            // FIXME: Replace logging to thowing exception after solving message reordering problem
-//            throw new IllegalArgumentException("List " + iMessages.stream()
-//                    .map(ConnectivityMessage::getSequence)
-//                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");
-    }
-
-    private static void checkForUnorderedSequences(
-            List<ConnectivityMessage> iMessages,
-            String sessionAlias,
-            Direction direction
-    ) {
-        boolean sequencesUnordered = false;
-        List<Long> missedSequences = new ArrayList<>();
-        for (int index = 0; index < iMessages.size() - 1; index++) {
-            long nextExpectedSequence = iMessages.get(index).getSequence() + 1;
-            long nextSequence = iMessages.get(index + 1).getSequence();
-            if (nextExpectedSequence != nextSequence) {
-                sequencesUnordered = true;
-                LongStream.range(nextExpectedSequence, nextSequence).forEach(missedSequences::add);
-            }
-        }
-        if (sequencesUnordered) {
-            LOGGER.error(
-                    "List {} hasn't elements with incremental sequence with one step for session alias '{}' and direction '{}'{}",
-                    iMessages.stream()
-                            .map(ConnectivityMessage::getSequence)
-                            .collect(Collectors.toList()),
-                    sessionAlias,
-                    direction,
-                    missedSequences.isEmpty()
-                            ? ""
-                            : String.format(". Missed sequences %s", missedSequences)
-            );
-        }
-    }
 }
