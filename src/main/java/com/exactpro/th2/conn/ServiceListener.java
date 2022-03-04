@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,20 +123,22 @@ public class ServiceListener implements IServiceListener {
 
     @Override
     public void onMessage(IServiceProxy service, IMessage message, boolean rejected, ServiceHandlerRoute route) {
-        LOGGER.debug("Handle message - route: {}; message: {}", route, message);
-        Direction direction = route.isFrom() ? FIRST : SECOND;
-        DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
-        AtomicLong directionSeq = directionToSequence.get(direction);
-        ConnectivityMessage connectivityMessage;
+        synchronized (subscriber) {
+            LOGGER.debug("Handle message - route: {}; message: {}", route, message);
+            Direction direction = route.isFrom() ? FIRST : SECOND;
+            DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
+            AtomicLong directionSeq = directionToSequence.get(direction);
+            ConnectivityMessage connectivityMessage;
 
-        if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
-            EvolutionBatch batch = new EvolutionBatch(message);
-            connectivityMessage = createConnectivityMessage(batch.getBatch(), direction, directionSeq);
-        } else {
-            connectivityMessage = createConnectivityMessage(List.of(message), direction, directionSeq);
+            if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
+                EvolutionBatch batch = new EvolutionBatch(message);
+                connectivityMessage = createConnectivityMessage(batch.getBatch(), direction, directionSeq);
+            } else {
+                connectivityMessage = createConnectivityMessage(List.of(message), direction, directionSeq);
+            }
+
+            subscriber.onNext(connectivityMessage);
         }
-
-        subscriber.onNext(connectivityMessage);
     }
 
     @Override
