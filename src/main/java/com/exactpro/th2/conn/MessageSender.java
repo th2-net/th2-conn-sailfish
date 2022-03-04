@@ -15,15 +15,6 @@
  */
 package com.exactpro.th2.conn;
 
-import static java.util.Objects.requireNonNull;
-
-import java.io.IOException;
-import java.util.Base64;
-import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
 import com.exactpro.sf.common.messages.impl.Metadata;
@@ -42,6 +33,14 @@ import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 
 import io.reactivex.rxjava3.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Base64;
+import java.util.Map;
+
+import static java.util.Objects.requireNonNull;
 
 public class MessageSender {
     private static final String SEND_ATTRIBUTE = "send";
@@ -103,7 +102,7 @@ public class MessageSender {
                 logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
             }
         } catch (Exception ex) {
-            Event errorEvent = createErrorEvent("SendError")
+            Event errorEvent = createErrorEvent("SendError", ex)
                     .bodyData(EventUtils.createMessageBean("Cannot send message. Message body in base64:"))
                     .bodyData(EventUtils.createMessageBean(Base64.getEncoder().encodeToString(data)));
             EventStoreExtensions.addException(errorEvent, ex);
@@ -124,10 +123,12 @@ public class MessageSender {
         }
     }
 
-    private Event createErrorEvent(String eventType) {
+    private Event createErrorEvent(String eventType, Exception e) {
         return Event.start().endTimestamp()
                 .status(Status.FAILED)
-                .type(eventType);
+                .type(eventType)
+                .name("Raw message sending error")
+                .exception(e, true);
     }
 
     private IMetadata toSailfishMetadata(RawMessage protoMsg) {
