@@ -1,4 +1,4 @@
-# Connect (3.10.1)
+# Connect (3.10.2)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -118,6 +118,10 @@ spec:
 ```
 
 ## Release notes
+
+### 3.10.2
+
++ Error events are made more informative. added event names and error logs.
 
 ### 3.10.1
 
