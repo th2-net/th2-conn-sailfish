@@ -136,12 +136,12 @@ public class TestEvent {
         }
 
         @Override
-        public void send(RawMessageBatch message, String... queueAttr) throws IOException {
+        public void send(RawMessageBatch message, String... queueAttr) {
 
         }
 
         @Override
-        public void sendAll(RawMessageBatch message, String... queueAttr) throws IOException {
+        public void sendAll(RawMessageBatch message, String... queueAttr) {
 
         }
 

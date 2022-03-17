@@ -15,6 +15,15 @@
  */
 package com.exactpro.th2.conn;
 
+import static java.util.Objects.requireNonNull;
+
+import java.io.IOException;
+import java.util.Base64;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
 import com.exactpro.sf.common.messages.impl.Metadata;
@@ -33,14 +42,6 @@ import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 
 import io.reactivex.rxjava3.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.util.Base64;
-import java.util.Map;
-
-import static java.util.Objects.requireNonNull;
 
 public class MessageSender {
     private static final String SEND_ATTRIBUTE = "send";
