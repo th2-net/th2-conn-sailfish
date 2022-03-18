@@ -1,3 +1,18 @@
+/*
+ * Copyright 2022 Exactpro (Exactpro Systems Limited)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.exactpro.th2.conn;
 
 import com.exactpro.sf.externalapi.IServiceProxy;
@@ -9,16 +24,12 @@ import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.message.MessageListener;
 import com.exactpro.th2.common.schema.message.MessageRouter;
-import com.exactpro.th2.common.schema.message.MessageRouterContext;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
-import com.exactpro.th2.common.schema.message.configuration.MessageRouterConfiguration;
-import com.exactpro.th2.common.schema.message.impl.rabbitmq.connection.ConnectionManager;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.events.EventType;
 import com.google.protobuf.ByteString;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -30,21 +41,29 @@ import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
 public class TestEvent {
 
     private static IServiceProxy serviceProxy;
-    private static MyMessageRouter router;
     private static MyEventDispatcher eventDispatcher;
     private static MessageSender messageSender;
+    private static MessageListener messageListener;
 
     @BeforeAll
     public static void initMessages(){
         serviceProxy = mock(IServiceProxy.class);
-        router = new MyMessageRouter();
+        MessageRouter<RawMessageBatch> router = mock(MessageRouter.class);
         MessageRouter<EventBatch> eventBatchMessageRouter = mock(MessageRouter.class);
+
+        doAnswer(invocation -> {
+            messageListener = invocation.getArgument(0);
+            return (SubscriberMonitor) () -> {
+            };
+        }).when(router).subscribeAll(any(), any());
+
         eventDispatcher = new MyEventDispatcher(eventBatchMessageRouter, "rootID",
                 Map.of(EventType.ERROR, "rootEventID"));
 
@@ -59,7 +78,7 @@ public class TestEvent {
                 .build();
 
         doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
-        router.sendToSubscriber("stubValue", rawMessageBatch);
+        messageListener.handler("stubValue", rawMessageBatch);
     }
 
     @Test
@@ -93,7 +112,7 @@ public class TestEvent {
                 .build();
 
         doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
-        router.sendToSubscriber("stubValue", rawMessageBatch);
+        messageListener.handler("stubValue", rawMessageBatch);
 
         Event event = eventDispatcher.getEvents().get(0);
         event.addSubEvent(Event.start());
@@ -117,64 +136,6 @@ public class TestEvent {
         messageSender.stop();
     }
 
-    public static class MyMessageRouter implements MessageRouter<RawMessageBatch> {
-
-        List<MessageListener> listeners = new ArrayList<>();
-
-        public void sendToSubscriber(String tag, RawMessageBatch message) throws Exception {
-            listeners.get(0).handler(tag, message);
-        }
-
-        @Override
-        public void init(@NotNull ConnectionManager connectionManager, @NotNull MessageRouterConfiguration configuration) {
-
-        }
-
-        @Override
-        public void init(@NotNull MessageRouterContext context) {
-
-        }
-
-        @Override
-        public void send(RawMessageBatch message, String... queueAttr) {
-
-        }
-
-        @Override
-        public void sendAll(RawMessageBatch message, String... queueAttr) {
-
-        }
-
-        @Override
-        public @Nullable SubscriberMonitor subscribe(MessageListener callback, String... queueAttr) {
-
-            listeners.add(callback);
-
-            return () -> {
-            };
-        }
-
-        @Override
-        public @Nullable SubscriberMonitor subscribeAll(MessageListener callback) {
-            listeners.add(callback);
-
-            return () -> {
-            };
-        }
-
-        @Override
-        public @Nullable SubscriberMonitor subscribeAll(MessageListener callback, String... queueAttr) {
-            listeners.add(callback);
-
-            return () -> {
-            };
-        }
-
-        @Override
-        public void close() {
-
-        }
-    }
 
     public static class MyEventDispatcher implements EventDispatcher {
 
