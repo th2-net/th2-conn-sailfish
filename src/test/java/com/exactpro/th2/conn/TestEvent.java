@@ -29,15 +29,13 @@ import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.events.EventType;
 import com.google.protobuf.ByteString;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -47,16 +45,20 @@ import static org.mockito.Mockito.mock;
 
 public class TestEvent {
 
+    private static final String rootID = "rootID";
+    private static final Map<EventType, String> parentIds = Map.of(EventType.ERROR, "errorEventID");
+
     private static IServiceProxy serviceProxy;
-    private static MyEventDispatcher eventDispatcher;
+    private static EventDispatcher eventDispatcher;
     private static MessageSender messageSender;
     private static MessageListener<RawMessageBatch> messageListener;
+    private static Event event;
+    private static String parentId;
 
     @BeforeAll
-    public static void initMessages(){
+    public static void initMessages() throws IOException {
         serviceProxy = mock(IServiceProxy.class);
         MessageRouter<RawMessageBatch> router = mock(MessageRouter.class);
-        MessageRouter<EventBatch> eventBatchMessageRouter = mock(MessageRouter.class);
 
         doAnswer(invocation -> {
             messageListener = invocation.getArgument(0);
@@ -64,12 +66,31 @@ public class TestEvent {
             };
         }).when(router).subscribeAll(any(), any());
 
-        eventDispatcher = new MyEventDispatcher(eventBatchMessageRouter, "rootID",
-                Map.of(EventType.ERROR, "rootEventID"));
+        eventDispatcher = mock(EventDispatcher.class);
+        doAnswer(invocation -> {
+            EventHolder eventHolder = invocation.getArgument(0);
+            EventType eventType = eventHolder.getType();
+
+            eventDispatcher.store(eventHolder.getEvent(),
+                    parentIds.get(eventType) != null ? parentIds.get(eventType) : rootID);
+            return null;
+        }).when(eventDispatcher).store(any());
+
+        doAnswer(invocation -> {
+            event = invocation.getArgument(0);
+            parentId = invocation.getArgument(1);
+            return null;
+        }).when(eventDispatcher).store(any(), any());
 
         messageSender = new MessageSender(serviceProxy, router, eventDispatcher,
                 EventID.newBuilder().setId("stubID").build());
         messageSender.start();
+    }
+
+    @AfterEach
+    public void clear() {
+        event = null;
+        parentId = null;
     }
 
     public void sendIncorrectMessage() throws Exception {
@@ -84,10 +105,9 @@ public class TestEvent {
     @Test
     public void eventHasBodyTest() throws Exception {
         sendIncorrectMessage();
-        Event event = eventDispatcher.getEvents().get(0);
         event.addSubEvent(Event.start());
 
-        ByteString body = event.toProto(EventUtils.toEventID(eventDispatcher.getParentIds().get(0))).getBody();
+        ByteString body = event.toProto(EventUtils.toEventID(parentId)).getBody();
         Assertions.assertEquals("[{\"data\":\"java.lang.IllegalStateException: error\",\"type\":\"message\"}," +
                 "{\"data\":\"Cannot send message. Message body in base64:\",\"type\":\"message\"},{\"data\":\"\"," +
                 "\"type\":\"message\"},{\"data\":\"java.lang.IllegalStateException: error\",\"type\":\"message\"}]", body.toStringUtf8());
@@ -96,10 +116,9 @@ public class TestEvent {
     @Test
     public void eventHasNameTest() throws Exception {
         sendIncorrectMessage();
-        Event event = eventDispatcher.getEvents().get(0);
         event.addSubEvent(Event.start());
 
-        String name = event.toProto(EventUtils.toEventID(eventDispatcher.getParentIds().get(0))).getName();
+        String name = event.toProto(EventUtils.toEventID(parentId)).getName();
         Assertions.assertEquals("Failed to send raw message", name);
     }
 
@@ -114,67 +133,23 @@ public class TestEvent {
         doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
         messageListener.handler("stubValue", rawMessageBatch);
 
-        Event event = eventDispatcher.getEvents().get(0);
         event.addSubEvent(Event.start());
 
-        EventBatch eventBatch = event.toBatchProto(EventUtils.toEventID(eventDispatcher.getParentIds().get(0)));
+        EventBatch eventBatch = event.toBatchProto(EventUtils.toEventID(parentId));
         Assertions.assertEquals("RawMessageParentEventID", eventBatch.getParentEventId().getId());
     }
 
     @Test
     public void sentMessageWithoutParentEventIDTest() throws Exception {
         sendIncorrectMessage();
-        Event event2 = eventDispatcher.getEvents().get(0);
-        event2.addSubEvent(Event.start());
+        event.addSubEvent(Event.start());
 
-        EventBatch eventBatch2 = event2.toBatchProto(EventUtils.toEventID(eventDispatcher.getParentIds().get(0)));
-        Assertions.assertEquals("rootEventID", eventBatch2.getParentEventId().getId());
+        EventBatch eventBatch = event.toBatchProto(EventUtils.toEventID(parentId));
+        Assertions.assertEquals("errorEventID", eventBatch.getParentEventId().getId());
     }
 
     @AfterAll
     private static void close() throws IOException {
         messageSender.stop();
-    }
-
-
-    public static class MyEventDispatcher implements EventDispatcher {
-
-        MessageRouter<EventBatch> messageRouter;
-        String rootID;
-        Map<EventType, String> parentIdByType;
-
-        List<Event> events = new ArrayList<>();
-        List<String> parentIds = new ArrayList<>();
-
-        public MyEventDispatcher(MessageRouter<EventBatch> messageRouter, String rootID,
-                                 Map<EventType, String> parentIdByType) {
-            this.messageRouter = messageRouter;
-            this.rootID = rootID;
-            this.parentIdByType = parentIdByType;
-        }
-
-        @Override
-        public void store(@NotNull EventHolder eventHolder) {
-            eventDispatcher.parentIds.clear();
-            eventDispatcher.events.clear();
-
-            events.add(eventHolder.getEvent());
-            parentIds.add(parentIdByType.get(EventType.ERROR) != null ? parentIdByType.get(EventType.ERROR) : rootID);
-        }
-
-        @Override
-        public void store(@NotNull Event event, @NotNull String parentId) {
-            events.add(event);
-            parentIds.add(parentId);
-
-        }
-
-        public List<Event> getEvents() {
-            return events;
-        }
-
-        public List<String> getParentIds() {
-            return parentIds;
-        }
     }
 }
