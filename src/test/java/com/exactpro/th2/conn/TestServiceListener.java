@@ -48,25 +48,19 @@ public class TestServiceListener {
                 "SessionAlias", processor, eventDispatcher);
 
         ServiceEvent serviceEvent = ServiceEventFactory.createEventInfo(ServiceName.parse("serviceName"), ServiceEvent.Type.INFO,
-                "Warn: incoming message with missing field: 45: Required " +
-                        "tag missing, field=45: 8=FIXT.1.1\0019=112\00135=j\00134=3783\00149=FGW" +
-                        "\00152=20210203-12:30:48.238\00156=DEMO-CONN1\00158=Unknown SecurityID" +
-                        "\001371=48\001372=D\001379=9741113\001380=2\00110=019\001", null);
+                "Warn: incoming message with missing field: 45", null);
 
         IServiceProxy serviceProxy = mock(IServiceProxy.class);
         serviceListener.onEvent(serviceProxy, serviceEvent);
 
         Event event = eventDispatcher.getEvent();
-        com.exactpro.th2.common.grpc.Event grpcEvent = event.toProto(null);
+        var grpcEvent = event.toProto(null);
 
         String name = grpcEvent.getName();
         Assertions.assertEquals("Service [serviceName] emitted event with status INFO", name);
 
         String body = grpcEvent.getBody().toStringUtf8();
-        Assertions.assertEquals("[{\"data\":\"Warn: incoming message with missing field: 45: Required " +
-                "tag missing, field=45: 8=FIXT.1.1\\u00019=112\\u000135=j\\u000134=3783\\u000149=FGW" +
-                "\\u000152=20210203-12:30:48.238\\u000156=DEMO-CONN1\\u000158=Unknown SecurityID" +
-                "\\u0001371=48\\u0001372=D\\u0001379=9741113\\u0001380=2\\u000110=019\\u0001\",\"type\":\"message\"}]", body);
+        Assertions.assertEquals("[{\"data\":\"Warn: incoming message with missing field: 45\",\"type\":\"message\"}]", body);
     }
 
 
