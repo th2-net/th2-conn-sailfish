@@ -25,6 +25,7 @@ import com.exactpro.sf.services.ServiceEvent.Level;
 import com.exactpro.sf.services.ServiceHandlerRoute;
 import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
+import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
@@ -144,11 +145,13 @@ public class ServiceListener implements IServiceListener {
     @Override
     public void onEvent(IServiceProxy service, ServiceEvent serviceEvent) {
         LOGGER.info("Session '{}' emitted service event '{}'", sessionAlias, serviceEvent);
+        String eventName = "Service [" + serviceEvent.getServiceName().getServiceName() + "] emitted event with status " + serviceEvent.getLevel();
         try {
             Event event = Event.start().endTimestamp()
-                    .name(serviceEvent.getMessage())
+                    .name(eventName)
                     .status(serviceEvent.getLevel() == Level.ERROR ? Status.FAILED : Status.PASSED)
                     .type("Service event")
+                    .bodyData(EventUtils.createMessageBean(serviceEvent.getMessage()))
                     .description(serviceEvent.getDetails());
 
             eventDispatcher.store(EventHolder.createServiceEvent(event));
