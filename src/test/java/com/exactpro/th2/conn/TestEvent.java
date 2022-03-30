@@ -105,7 +105,6 @@ public class TestEvent {
     @Test
     public void eventHasBodyTest() throws Exception {
         sendIncorrectMessage();
-        event.addSubEvent(Event.start());
 
         ByteString body = event.toProto(EventUtils.toEventID(parentId)).getBody();
         Assertions.assertEquals("[{\"data\":\"java.lang.IllegalStateException: error\",\"type\":\"message\"}," +
@@ -116,7 +115,6 @@ public class TestEvent {
     @Test
     public void eventHasNameTest() throws Exception {
         sendIncorrectMessage();
-        event.addSubEvent(Event.start());
 
         String name = event.toProto(EventUtils.toEventID(parentId)).getName();
         Assertions.assertEquals("Failed to send raw message", name);
