@@ -103,7 +103,7 @@ public class MessageSender {
                 logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
             }
         } catch (Exception ex) {
-            Event errorEvent = createErrorEvent("SendError")
+            Event errorEvent = createErrorEvent("SendError", ex)
                     .bodyData(EventUtils.createMessageBean("Cannot send message. Message body in base64:"))
                     .bodyData(EventUtils.createMessageBean(Base64.getEncoder().encodeToString(data)));
             EventStoreExtensions.addException(errorEvent, ex);
@@ -124,10 +124,12 @@ public class MessageSender {
         }
     }
 
-    private Event createErrorEvent(String eventType) {
+    private Event createErrorEvent(String eventType, Exception e) {
         return Event.start().endTimestamp()
                 .status(Status.FAILED)
-                .type(eventType);
+                .type(eventType)
+                .name("Failed to send raw message")
+                .exception(e, true);
     }
 
     private IMetadata toSailfishMetadata(RawMessage protoMsg) {

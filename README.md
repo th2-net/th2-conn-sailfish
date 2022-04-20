@@ -121,7 +121,7 @@ spec:
 
 ### 3.10.2
 
-+ Events are made more convenient. Error message moved from the name to the body of the event.
++ Events are made more convenient. Added event names and error logs. Error message moved from the name to the body of the event.
 
 ### 3.10.1
 
