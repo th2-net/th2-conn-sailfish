@@ -55,12 +55,12 @@ public class ConnectivityMessage {
     private final MessageID messageID;
     private final Timestamp timestamp;
 
-    public ConnectivityMessage(List<IMessage> sailfishMessages, String sessionAlias, Direction direction, long sequence) {
+    public ConnectivityMessage(List<IMessage> sailfishMessages, String sessionAlias, Direction direction, long sequence, String sessionGroup) {
         this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Message can't be null"));
         if (sailfishMessages.isEmpty()) {
             throw new IllegalArgumentException("At least one sailfish messages must be passed. Session alias: " + sessionAlias + "; Direction: " + direction);
         }
-        messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null")),
+        messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null"), sessionGroup),
                 requireNonNull(direction, "Direction can't be null"), sequence);
         timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
     }
@@ -139,10 +139,13 @@ public class ConnectivityMessage {
                 }).sum();
     }
 
-    private static ConnectionID createConnectionID(String sessionAlias) {
-        return ConnectionID.newBuilder()
-                .setSessionAlias(sessionAlias)
-                .build();
+    private static ConnectionID createConnectionID(String sessionAlias, String sessionGroup) {
+		ConnectionID.Builder builder = ConnectionID.newBuilder()
+				.setSessionAlias(sessionAlias);
+		if (sessionGroup != null) {
+			builder.setSessionGroup(sessionGroup);
+		}
+        return builder.build();
     }
 
     private static MessageID createMessageID(ConnectionID connectionId, Direction direction, long sequence) {

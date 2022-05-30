@@ -41,7 +41,8 @@ class TestConnectivityMessage {
             ),
             "test",
             Direction.SECOND,
-            1L
+            1L,
+            null
         )
 
         val rawMessage: RawMessage = connectivityMessage.convertToProtoRawMessage()

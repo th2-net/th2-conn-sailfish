@@ -162,7 +162,7 @@ public class MicroserviceMain {
                     EventType.SERVICE_EVENT, serviceEventsRoot.getId()
             ));
 
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, configuration.getSessionAlias(), processor, eventDispatcher);
+            IServiceListener serviceListener = new ServiceListener(directionToSequence, configuration.getSessionAlias(), processor, eventDispatcher, configuration.getSessionGroup());
             IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             disposer.register(() -> {
                 LOGGER.info("Stop service proxy");

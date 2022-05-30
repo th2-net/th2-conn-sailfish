@@ -37,6 +37,8 @@ public class ConnectivityConfiguration {
     @JsonProperty(required = true)
     private Map<String, Object> settings;
 
+    private String sessionGroup;
+
     public boolean isEnableMessageSendingEvent() {
         return enableMessageSendingEvent;
     }
@@ -64,4 +66,8 @@ public class ConnectivityConfiguration {
     public Map<String, Object> getSettings() {
         return settings;
     }
+
+	public String getSessionGroup() {
+		return sessionGroup;
+	}
 }

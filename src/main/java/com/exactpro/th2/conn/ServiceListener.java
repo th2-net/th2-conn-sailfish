@@ -74,6 +74,7 @@ public class ServiceListener implements IServiceListener {
 
     private final Map<Direction, AtomicLong> directionToSequence;
     private final String sessionAlias;
+    private final String sessionGroup;
     private final Subscriber<ConnectivityMessage> subscriber;
     private final EventDispatcher eventDispatcher;
 
@@ -81,12 +82,14 @@ public class ServiceListener implements IServiceListener {
             Map<Direction, AtomicLong> directionToSequence,
             String sessionAlias,
             Subscriber<ConnectivityMessage> subscriber,
-            EventDispatcher eventDispatcher
+            EventDispatcher eventDispatcher,
+			String sessionGroup
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.sessionAlias = requireNonNull(sessionAlias, "Session alias can't be null");
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
+        this.sessionGroup = sessionGroup;
     }
 
     @Override
@@ -161,6 +164,6 @@ public class ServiceListener implements IServiceListener {
     private ConnectivityMessage createConnectivityMessage(List<IMessage> messages, Direction direction, AtomicLong directionSeq) {
         long sequence = directionSeq.incrementAndGet();
         LOGGER.debug("On message: direction '{}'; sequence '{}'; messages '{}'", direction, sequence, messages);
-        return new ConnectivityMessage(messages, sessionAlias, direction, sequence);
+        return new ConnectivityMessage(messages, sessionAlias, direction, sequence, sessionGroup);
     }
 }
