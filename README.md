@@ -122,6 +122,7 @@ spec:
 ### 3.10.2
 
 + Events are made more convenient. Added event names and error logs. Error message moved from the name to the body of the event.
++ Use temporal directory for last layer in sailfish's workspace
 
 ### 3.10.1
 
