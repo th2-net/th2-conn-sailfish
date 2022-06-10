@@ -30,12 +30,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -222,23 +224,25 @@ public class MicroserviceMain {
                 ))
                 .observeOn(PIPELINE_SCHEDULER)
                 .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
-                .groupBy(ConnectivityMessage::getDirection)
+				.groupBy(ConnectivityMessage::getSessionAlias)
                 .map(group -> {
-                    @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
+                    AtomicReference<@NonNull Direction> direction = new AtomicReference<>();
                     Flowable<ConnectivityMessage> messageConnectable = group
-                            .doOnNext(message -> LOGGER.trace(
+                            .doOnNext(message ->  {
+                            	LOGGER.trace(
                                     "Message inside map with sequence {} and direction {}",
                                     message.getSequence(),
-                                    message.getDirection()
-                            ))
+                                    message.getDirection());
+								direction.set(requireNonNull(message.getDirection(), "Direction can't be null"));
+							})
                             .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
                             .publish()
-                            .refCount(enableMessageSendingEvent && direction == Direction.SECOND ? 2 : 1);
+                            .refCount(enableMessageSendingEvent && direction.get() == Direction.SECOND ? 2 : 1);
 
-                    if (enableMessageSendingEvent && direction == Direction.SECOND) {
+                    if (enableMessageSendingEvent && direction.get() == Direction.SECOND) {
                         subscribeToSendMessage(eventBatchRouter, messageConnectable);
                     }
-                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize);
+                    createPackAndPublishPipeline(direction.get(), messageConnectable, rawMessageRouter, maxMessageBatchSize);
 
                     return messageConnectable;
                 });

@@ -62,7 +62,9 @@ public class ConnectivityMessage {
         }
         messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null"), sessionGroup),
                 requireNonNull(direction, "Direction can't be null"), sequence);
-        timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
+		long time = System.currentTimeMillis();
+		LOGGER.info("SF time: {}. Current time: {}", sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime(), time);
+        timestamp = createTimestamp(time);
     }
 
     public String getSessionAlias() {
@@ -122,7 +124,7 @@ public class ConnectivityMessage {
         return sailfishMessages;
     }
 
-    @Override
+	@Override
     public String toString() {
         return new ToStringBuilder(this)
                 .append("messageID", shortDebugString(messageID))
