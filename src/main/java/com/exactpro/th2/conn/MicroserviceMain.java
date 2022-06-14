@@ -216,7 +216,6 @@ public class MicroserviceMain {
             int maxMessageBatchSize, boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-		AtomicReference<@NonNull Direction> direction = new AtomicReference<>();
         return flowable
                 .doOnNext(message -> {
                 	LOGGER.trace(
@@ -224,17 +223,20 @@ public class MicroserviceMain {
 							message.getSequence(),
 							message.getDirection()
 					);
-					direction.set(requireNonNull(message.getDirection(), "Direction can't be null"));
 				})
                 .observeOn(PIPELINE_SCHEDULER)
                 .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
 				.groupBy(ConnectivityMessage::getSessionAlias)
                 .map(group -> {
+                	AtomicReference<@NonNull Direction> direction = new AtomicReference<>();
                     Flowable<ConnectivityMessage> messageConnectable = group
-                            .doOnNext(message -> LOGGER.trace(
-                                    "Message inside map with sequence {} and direction {}",
-                                    message.getSequence(),
-                                    message.getDirection())
+                            .doOnNext(message -> {
+                            	LOGGER.trace(
+												"Message inside map with sequence {} and direction {}",
+												message.getSequence(),
+												message.getDirection());
+                            	direction.set(message.getDirection());
+									}
 							)
                             .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
                             .publish()
@@ -243,7 +245,7 @@ public class MicroserviceMain {
                     if (enableMessageSendingEvent && direction.get() == Direction.SECOND) {
                         subscribeToSendMessage(eventBatchRouter, messageConnectable);
                     }
-                    createPackAndPublishPipeline(direction.get(), messageConnectable, rawMessageRouter, maxMessageBatchSize);
+                    createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize);
 
                     return messageConnectable;
                 });
@@ -277,10 +279,9 @@ public class MicroserviceMain {
                 });
     }
 
-    private static void createPackAndPublishPipeline(Direction direction, Flowable<ConnectivityMessage> messageConnectable,
+    private static void createPackAndPublishPipeline(Flowable<ConnectivityMessage> messageConnectable,
             MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize) {
 
-        LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
                 .doOnNext(message -> LOGGER.trace(
                         "Message before window with sequence {} and direction {}",
@@ -305,7 +306,7 @@ public class MicroserviceMain {
                 .subscribe(batch -> {
                     try {
                         RawMessageBatch rawBatch = batch.convertToProtoRawBatch();
-                        rawMessageRouter.sendAll(rawBatch, (direction == Direction.FIRST ? QueueAttribute.FIRST : QueueAttribute.SECOND).toString());
+                        rawMessageRouter.send(rawBatch); //FIXME: Only one pin can be used
                     } catch (Exception e) {
                         if (LOGGER.isErrorEnabled()) {
                             LOGGER.error("Cannot send batch with sequences: {}",
@@ -314,9 +315,9 @@ public class MicroserviceMain {
                         }
                     }
                 });
-        LOGGER.info("Subscribed to transfer raw batch group {}", direction);
+        LOGGER.info("Subscribed to transfer raw batch group");
 
-        LOGGER.info("Connected to publish batches group {}", direction);
+        LOGGER.info("Connected to publish batches group");
     }
 
     private interface Disposable {

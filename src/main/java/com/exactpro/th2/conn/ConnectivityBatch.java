@@ -79,8 +79,7 @@ public class ConnectivityBatch {
         }
 
         if (!iMessages.stream()
-                .allMatch(iMessage -> Objects.equals(sessionAlias, iMessage.getSessionAlias())
-                        && direction == iMessage.getDirection())) {
+                .allMatch(iMessage -> Objects.equals(sessionAlias, iMessage.getSessionAlias()))) {
             throw new IllegalArgumentException("List " + iMessages + " has elements with incorrect metadata, expected session alias '"+ sessionAlias +"' direction '" + direction + '\'');
         }
 
