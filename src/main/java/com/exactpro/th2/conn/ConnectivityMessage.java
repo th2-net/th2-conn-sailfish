@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,9 +62,8 @@ public class ConnectivityMessage {
         }
         messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null"), sessionGroup),
                 requireNonNull(direction, "Direction can't be null"), sequence);
-		long time = System.currentTimeMillis();
-		LOGGER.info("SF time: {}. Current time: {}", sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime(), time);
-        timestamp = createTimestamp(time);
+		LOGGER.warn("Sailfish transforms th2 message to real send message too slow, delay is about 10 milliseconds. Please add more hardware resources");
+        timestamp = createTimestamp(System.currentTimeMillis());
     }
 
     public String getSessionAlias() {
