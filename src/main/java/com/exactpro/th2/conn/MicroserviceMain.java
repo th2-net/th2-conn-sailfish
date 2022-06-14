@@ -216,25 +216,26 @@ public class MicroserviceMain {
             int maxMessageBatchSize, boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
+		AtomicReference<@NonNull Direction> direction = new AtomicReference<>();
         return flowable
-                .doOnNext(message -> LOGGER.trace(
-                        "Message before observeOn with sequence {} and direction {}",
-                        message.getSequence(),
-                        message.getDirection()
-                ))
+                .doOnNext(message -> {
+                	LOGGER.trace(
+							"Message before observeOn with sequence {} and direction {}",
+							message.getSequence(),
+							message.getDirection()
+					);
+					direction.set(requireNonNull(message.getDirection(), "Direction can't be null"));
+				})
                 .observeOn(PIPELINE_SCHEDULER)
                 .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
 				.groupBy(ConnectivityMessage::getSessionAlias)
                 .map(group -> {
-                    AtomicReference<@NonNull Direction> direction = new AtomicReference<>();
                     Flowable<ConnectivityMessage> messageConnectable = group
-                            .doOnNext(message ->  {
-                            	LOGGER.trace(
+                            .doOnNext(message -> LOGGER.trace(
                                     "Message inside map with sequence {} and direction {}",
                                     message.getSequence(),
-                                    message.getDirection());
-								direction.set(requireNonNull(message.getDirection(), "Direction can't be null"));
-							})
+                                    message.getDirection())
+							)
                             .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
                             .publish()
                             .refCount(enableMessageSendingEvent && direction.get() == Direction.SECOND ? 2 : 1);
