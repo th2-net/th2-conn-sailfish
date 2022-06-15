@@ -82,34 +82,7 @@ public class ConnectivityBatch {
                 .allMatch(iMessage -> Objects.equals(sessionAlias, iMessage.getSessionAlias()))) {
             throw new IllegalArgumentException("List " + iMessages + " has elements with incorrect metadata, expected session alias '"+ sessionAlias +"' direction '" + direction + '\'');
         }
-
-        if (LOGGER.isErrorEnabled()) {
-            boolean sequencesUnordered = false;
-            List<Long> missedSequences = new ArrayList<>();
-            for (int index = 0; index < iMessages.size() - 1; index++) {
-                long nextExpectedSequence = iMessages.get(index).getSequence() + 1;
-                long nextSequence = iMessages.get(index + 1).getSequence();
-                if (nextExpectedSequence != nextSequence) {
-                    sequencesUnordered = true;
-                }
-                LongStream.range(nextExpectedSequence, nextSequence).forEach(missedSequences::add);
-            }
-            if (sequencesUnordered) {
-                LOGGER.error(
-                        "List {} hasn't elements with incremental sequence with one step for session alias '{}' and direction '{}'{}",
-                        iMessages.stream()
-                                .map(ConnectivityMessage::getSequence)
-                                .collect(Collectors.toList()),
-                        sessionAlias,
-                        direction,
-                        missedSequences.isEmpty()
-                                ? ""
-                                : String.format(". Missed sequences %s", missedSequences)
-                );
-            }
-        }
-
-            // FIXME: Replace logging to thowing exception after solving message reordering problem
+		// FIXME: Replace logging to thowing exception after solving message reordering problem
 //            throw new IllegalArgumentException("List " + iMessages.stream()
 //                    .map(ConnectivityMessage::getSequence)
 //                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");
