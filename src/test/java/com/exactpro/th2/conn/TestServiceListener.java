@@ -45,7 +45,7 @@ public class TestServiceListener {
         MyEventDispatcher eventDispatcher = new MyEventDispatcher();
 
         ServiceListener serviceListener = new ServiceListener(Map.of(Direction.FIRST, new AtomicLong(1)),
-                "SessionAlias", processor, eventDispatcher);
+                "SessionAlias", processor, eventDispatcher, null);
 
         ServiceEvent serviceEvent = ServiceEventFactory.createEventInfo(ServiceName.parse("serviceName"), ServiceEvent.Type.INFO,
                 "Warn: incoming message with missing field: 45", null);
