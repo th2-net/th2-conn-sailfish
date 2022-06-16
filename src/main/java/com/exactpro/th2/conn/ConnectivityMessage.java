@@ -62,10 +62,8 @@ public class ConnectivityMessage {
         }
         messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null"), sessionGroup),
                 requireNonNull(direction, "Direction can't be null"), sequence);
-		long time = System.currentTimeMillis();
-		LOGGER.warn("Sailfish transforms th2 message to real send message too slow, delay is about {} milliseconds. Please add more hardware resources",
-				time - sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
-        timestamp = createTimestamp(time);
+		LOGGER.warn("Sailfish transforms th2 message to real send message too slow, delay is about 10 milliseconds. Please add more hardware resources");
+        timestamp = createTimestamp(System.currentTimeMillis());
     }
 
     public String getSessionAlias() {
