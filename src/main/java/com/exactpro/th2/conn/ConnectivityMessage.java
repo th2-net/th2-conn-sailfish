@@ -123,7 +123,7 @@ public class ConnectivityMessage {
         return sailfishMessages;
     }
 
-	@Override
+    @Override
     public String toString() {
         return new ToStringBuilder(this)
                 .append("messageID", shortDebugString(messageID))

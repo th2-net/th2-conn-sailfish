@@ -84,7 +84,7 @@ public class ServiceListener implements IServiceListener {
             String sessionAlias,
             Subscriber<ConnectivityMessage> subscriber,
             EventDispatcher eventDispatcher,
-			String sessionGroup
+            String sessionGroup
     ) {
         this.directionToSequence = requireNonNull(directionToSequence, "Map direction to sequence counter can't be null");
         this.sessionAlias = requireNonNull(sessionAlias, "Session alias can't be null");
