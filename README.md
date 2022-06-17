@@ -1,5 +1,6 @@
 # Connect (3.11.0)
 
+
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
 
@@ -128,6 +129,7 @@ spec:
 ### 3.10.2
 
 + Events are made more convenient. Added event names and error logs. Error message moved from the name to the body of the event.
++ Use temporal directory for last layer in sailfish's workspace
 
 ### 3.10.1
 

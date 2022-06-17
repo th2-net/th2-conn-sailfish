@@ -28,6 +28,7 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
@@ -126,7 +127,8 @@ public class MicroserviceMain {
                 processor.onComplete();
             });
 
-            IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
+            IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder,
+                    Files.createTempDirectory("sailfish-workspace").toFile());
             disposer.register(() -> {
                 LOGGER.info("Close service factory");
                 serviceFactory.close();
