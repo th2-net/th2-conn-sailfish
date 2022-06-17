@@ -230,7 +230,7 @@ public class MicroserviceMain {
 				})
 				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
 				.publish()
-				.refCount(1);
+				.refCount(2);
 
 		subscribeToSendMessage(eventBatchRouter, messageConnectable);
 
@@ -247,23 +247,24 @@ public class MicroserviceMain {
                     // Sailfish does not support sending multiple messages at once.
                     // So we should send only a single event here.
                     // But just in case we are wrong, we add checking for sending multiple events
-                    if (connectivityMessage.getDirection() == Direction.SECOND) {
-                        boolean sent = false;
-                        for (IMessage message : connectivityMessage.getSailfishMessages()) {
-                            if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
-                                continue;
-                            }
-                            if (sent) {
-                                LOGGER.warn("The connectivity message has more than one sailfish message with parent event ID: {}", connectivityMessage);
-                            }
-                            Event event = Event.start().endTimestamp()
-                                    .name("Send '" + message.getName() + "' message")
-                                    .type("Send message")
-                                    .messageID(connectivityMessage.getMessageID());
-                            LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
-                            storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
-                            sent = true;
+                    if (connectivityMessage.getDirection() != Direction.SECOND) {
+                        return;
+                    }
+                    boolean sent = false;
+                    for (IMessage message : connectivityMessage.getSailfishMessages()) {
+                        if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
+                            continue;
                         }
+                        if (sent) {
+                            LOGGER.warn("The connectivity message has more than one sailfish message with parent event ID: {}", connectivityMessage);
+                        }
+                        Event event = Event.start().endTimestamp()
+                                .name("Send '" + message.getName() + "' message")
+                                .type("Send message")
+                                .messageID(connectivityMessage.getMessageID());
+                        LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
+                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
+                        sent = true;
                     }
                 });
     }
