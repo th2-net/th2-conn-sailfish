@@ -35,7 +35,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -206,46 +205,37 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(
+    private static @NonNull Flowable<ConnectivityMessage> createPipeline(
             Flowable<ConnectivityMessage> flowable, Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
             MessageRouter<RawMessageBatch> rawMessageRouter,
             int maxMessageBatchSize, boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-        return flowable
-                .doOnNext(message -> {
-                	LOGGER.trace(
+		Flowable<ConnectivityMessage> messageConnectable = flowable
+				.doOnNext(message -> {
+					LOGGER.trace(
 							"Message before observeOn with sequence {} and direction {}",
 							message.getSequence(),
 							message.getDirection()
 					);
 				})
-                .observeOn(PIPELINE_SCHEDULER)
-                .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
-				.groupBy(ConnectivityMessage::getSessionAlias)
-                .map(group -> {
-                	AtomicReference<@NonNull Direction> direction = new AtomicReference<>();
-                    Flowable<ConnectivityMessage> messageConnectable = group
-                            .doOnNext(message -> {
-                            	LOGGER.trace(
-												"Message inside map with sequence {} and direction {}",
-												message.getSequence(),
-												message.getDirection());
-                            	direction.set(message.getDirection());
-									}
-							)
-                            .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
-                            .publish()
-                            .refCount(enableMessageSendingEvent && direction.get() == Direction.SECOND ? 2 : 1);
+				.observeOn(PIPELINE_SCHEDULER)
+				.doOnNext(connectivityMessage -> {
+					LOGGER.debug("Start handling connectivity message {}", connectivityMessage);
+					LOGGER.trace(
+							"Message inside map with sequence {} and direction {}",
+							connectivityMessage.getSequence(),
+							connectivityMessage.getDirection());
+				})
+				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
+				.publish()
+				.refCount(1);
 
-                    if (enableMessageSendingEvent && direction.get() == Direction.SECOND) {
-                        subscribeToSendMessage(eventBatchRouter, messageConnectable);
-                    }
-                    createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize);
+		subscribeToSendMessage(eventBatchRouter, messageConnectable);
 
-                    return messageConnectable;
-                });
+		createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize);
+		return messageConnectable;
     }
 
     private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, Flowable<ConnectivityMessage> messageConnectable) {
@@ -257,21 +247,23 @@ public class MicroserviceMain {
                     // Sailfish does not support sending multiple messages at once.
                     // So we should send only a single event here.
                     // But just in case we are wrong, we add checking for sending multiple events
-                    boolean sent = false;
-                    for (IMessage message : connectivityMessage.getSailfishMessages()) {
-                        if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
-                            continue;
+                    if (connectivityMessage.getDirection() == Direction.SECOND) {
+                        boolean sent = false;
+                        for (IMessage message : connectivityMessage.getSailfishMessages()) {
+                            if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
+                                continue;
+                            }
+                            if (sent) {
+                                LOGGER.warn("The connectivity message has more than one sailfish message with parent event ID: {}", connectivityMessage);
+                            }
+                            Event event = Event.start().endTimestamp()
+                                    .name("Send '" + message.getName() + "' message")
+                                    .type("Send message")
+                                    .messageID(connectivityMessage.getMessageID());
+                            LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
+                            storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
+                            sent = true;
                         }
-                        if (sent) {
-                            LOGGER.warn("The connectivity message has more than one sailfish message with parent event ID: {}", connectivityMessage);
-                        }
-                        Event event = Event.start().endTimestamp()
-                                .name("Send '" + message.getName() + "' message")
-                                .type("Send message")
-                                .messageID(connectivityMessage.getMessageID());
-                        LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
-                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
-                        sent = true;
                     }
                 });
     }
