@@ -290,9 +290,7 @@ public class MicroserviceMain {
                                 .map(ConnectivityMessage::getSequence)
                                 .collect(Collectors.toList()));
                     }
-                })
-                .publish()
-                .refCount(1);
+                });
 
         batchConnectable
                 .subscribe(batch -> {
