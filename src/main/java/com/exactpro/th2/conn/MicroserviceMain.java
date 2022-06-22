@@ -74,6 +74,7 @@ import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.exceptions.Exceptions;
+import io.reactivex.rxjava3.flowables.ConnectableFlowable;
 import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
@@ -214,7 +215,7 @@ public class MicroserviceMain {
             int maxMessageBatchSize, boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-		Flowable<ConnectivityMessage> messageConnectable = flowable
+		ConnectableFlowable<ConnectivityMessage> messageConnectable = flowable
 				.doOnNext(message -> {
 					LOGGER.trace(
 							"Message before observeOn with sequence {} and direction {}",
@@ -231,12 +232,14 @@ public class MicroserviceMain {
 							connectivityMessage.getDirection());
 				})
 				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
-				.publish()
-				.refCount(2);
+				.publish();
 
 		subscribeToSendMessage(eventBatchRouter, messageConnectable);
 
 		createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize);
+
+        messageConnectable.connect();
+
 		return messageConnectable;
     }
 
@@ -274,7 +277,7 @@ public class MicroserviceMain {
     private static void createPackAndPublishPipeline(Flowable<ConnectivityMessage> messageConnectable,
             MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize) {
 
-        Flowable<ConnectivityBatch> batchConnectable = messageConnectable
+        messageConnectable
                 .doOnNext(message -> LOGGER.trace(
                         "Message before window with sequence {} and direction {}",
                         message.getSequence(),
@@ -290,9 +293,7 @@ public class MicroserviceMain {
                                 .map(ConnectivityMessage::getSequence)
                                 .collect(Collectors.toList()));
                     }
-                });
-
-        batchConnectable
+                })
                 .subscribe(batch -> {
                     try {
                         RawMessageBatch rawBatch = batch.convertToProtoRawBatch();
@@ -416,7 +417,9 @@ public class MicroserviceMain {
             try {
                 LOGGER.info("Subscribed to pipeline");
                 serviceProxy.start();
+                LOGGER.info("Service started. Starting message sender");
                 messageSender.start();
+                LOGGER.info("Subscription finished");
             } catch (Exception e) {
                 LOGGER.error("Services starting failure", e);
                 Exceptions.propagate(e);

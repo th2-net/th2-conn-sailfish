@@ -67,6 +67,8 @@ public class MessageSender {
             throw new IllegalStateException("Already subscribe");
         }
 
+        logger.info("Subscribing to queue with messages to send");
+
         subscriberMonitor = router.subscribeAll(this::handle, SEND_ATTRIBUTE);
     }
 
