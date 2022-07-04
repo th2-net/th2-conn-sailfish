@@ -123,6 +123,19 @@ spec:
 
 + Migration to books/pages cradle 4.0.0
 
+### 3.10.1
+
++ Update `sailfish-core` version from `3.2.1674` to `3.2.1741`
+  + Add exception for checking the property in `IMetadata`
++ Added synchronization by processor to `ServiceListener.onMessage()` otherwise processor sometimes misses some sequences
++ Added log about missed sequences
++ Added trace log to flowable processor
+
+### 3.10.0
+
++ Update `th2-common` version from `3.25.1` to `3.33.0`
++ Update `org.jetbrains.kotlin.jvm` version from `1.3.72` to `1.5.30`
+
 ### 3.9.0
 
 + Update `sailfish-core` version from `3.2.1650` to `3.2.1674`

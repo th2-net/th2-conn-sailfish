@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,11 @@
  */
 package com.exactpro.th2.conn;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,18 +98,35 @@ public class ConnectivityBatch {
             ));
         }
 
-        if (IntStream.range(0, iMessages.size() - 1)
-                .anyMatch(index -> iMessages.get(index).getSequence() + 1 != iMessages.get(index + 1).getSequence())) {
-            if (LOGGER.isErrorEnabled()) {
-                LOGGER.error("List {} hasn't elements with incremental sequence with one step", iMessages.stream()
-                                            .map(ConnectivityMessage::getSequence)
-                                            .collect(Collectors.toList()));
+        if (LOGGER.isErrorEnabled()) {
+            boolean sequencesUnordered = false;
+            List<Long> missedSequences = new ArrayList<>();
+            for (int index = 0; index < iMessages.size() - 1; index++) {
+                long nextExpectedSequence = iMessages.get(index).getSequence() + 1;
+                long nextSequence = iMessages.get(index + 1).getSequence();
+                if (nextExpectedSequence != nextSequence) {
+                    sequencesUnordered = true;
+                }
+                LongStream.range(nextExpectedSequence, nextSequence).forEach(missedSequences::add);
             }
+            if (sequencesUnordered) {
+                LOGGER.error(
+                        "List {} hasn't elements with incremental sequence with one step for session alias '{}' and direction '{}'{}",
+                        iMessages.stream()
+                                .map(ConnectivityMessage::getSequence)
+                                .collect(Collectors.toList()),
+                        sessionAlias,
+                        direction,
+                        missedSequences.isEmpty()
+                                ? ""
+                                : String.format(". Missed sequences %s", missedSequences)
+                );
+            }
+        }
 
             // FIXME: Replace logging to throwing exception after solving message reordering problem
 //            throw new IllegalArgumentException("List " + iMessages.stream()
 //                    .map(ConnectivityMessage::getSequence)
 //                    .collect(Collectors.toList())+ " hasn't elements with incremental sequence with one step");
-        }
     }
 }

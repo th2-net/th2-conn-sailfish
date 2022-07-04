@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,20 +131,22 @@ public class ServiceListener implements IServiceListener {
 
     @Override
     public void onMessage(IServiceProxy service, IMessage message, boolean rejected, ServiceHandlerRoute route) {
-        LOGGER.debug("Handle message - route: {}; message: {}", route, message);
-        Direction direction = route.isFrom() ? FIRST : SECOND;
-        DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
-        MessageID.Builder messageIdBuilder = idBuilder.get()
+        synchronized (subscriber) {
+            LOGGER.debug("Handle message - route: {}; message: {}", route, message);
+            Direction direction = route.isFrom() ? FIRST : SECOND;
+            DIRECTION_TO_COUNTER.get(direction).labels(sessionAlias).inc();
+            MessageID.Builder messageIdBuilder = idBuilder.get()
                 .setDirection(direction)
                 .setSequence(directionToSequence.get(direction).incrementAndGet());
 
         ConnectivityMessage connectivityMessage;
         if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
             connectivityMessage = createConnectivityMessage(new EvolutionBatch(message).getBatch(), messageIdBuilder);
-        } else {
-            connectivityMessage = createConnectivityMessage(List.of(message), messageIdBuilder);
+            } else {
+                connectivityMessage = createConnectivityMessage(List.of(message), messageIdBuilder);
         }
-        subscriber.onNext(connectivityMessage);
+            subscriber.onNext(connectivityMessage);
+        }
     }
 
     @Override
