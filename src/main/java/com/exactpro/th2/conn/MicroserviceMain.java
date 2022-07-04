@@ -20,7 +20,6 @@ import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
 import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
-import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
 import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
@@ -29,6 +28,7 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
@@ -40,6 +40,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +66,6 @@ import com.exactpro.th2.common.grpc.EventBatch;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
-import com.exactpro.th2.common.schema.message.QueueAttribute;
 import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventType;
@@ -75,6 +75,7 @@ import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.exceptions.Exceptions;
+import io.reactivex.rxjava3.flowables.ConnectableFlowable;
 import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
@@ -127,7 +128,8 @@ public class MicroserviceMain {
                 processor.onComplete();
             });
 
-            IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder);
+            IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder,
+                    Files.createTempDirectory("sailfish-workspace").toFile());
             disposer.register(() -> {
                 LOGGER.info("Close service factory");
                 serviceFactory.close();
@@ -175,8 +177,15 @@ public class MicroserviceMain {
 
             IServiceListener serviceListener = new ServiceListener(
                     getActualSequences(),
-                    () -> finalFactory.newMessageIDBuilder()
-                            .setConnectionId(ConnectionID.newBuilder().setSessionAlias(configuration.getSessionAlias())),
+                    () -> {
+                        ConnectionID.Builder connectionIdBuilder = ConnectionID.newBuilder()
+                                .setSessionAlias(configuration.getSessionAlias());
+                        if (StringUtils.isNotBlank(configuration.getSessionGroup())) {
+                            connectionIdBuilder.setSessionGroup(configuration.getSessionGroup());
+                        }
+                        return finalFactory.newMessageIDBuilder()
+                                .setConnectionId(connectionIdBuilder);
+                    },
                     processor,
                     eventDispatcher
             );
@@ -232,7 +241,7 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(
+    private static @NonNull Flowable<ConnectivityMessage> createPipeline(
             Flowable<ConnectivityMessage> flowable,
             Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
@@ -242,34 +251,32 @@ public class MicroserviceMain {
     ) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-        return flowable
-                .doOnNext(message -> LOGGER.trace(
-                        "Message before observeOn with sequence {} and direction {}",
-                        message.getSequence(),
-                        message.getDirection()
-                ))
-                .observeOn(PIPELINE_SCHEDULER)
-                .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
-                .groupBy(ConnectivityMessage::getDirection)
-                .map(group -> {
-                    @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
-                    Flowable<ConnectivityMessage> messageConnectable = group
-                            .doOnNext(message -> LOGGER.trace(
-                                    "Message inside map with sequence {} and direction {}",
-                                    message.getSequence(),
-                                    message.getDirection()
-                            ))
-                            .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
-                            .publish()
-                            .refCount(enableMessageSendingEvent && direction == Direction.SECOND ? 2 : 1);
+		ConnectableFlowable<ConnectivityMessage> messageConnectable = flowable
+				.doOnNext(message -> {
+					LOGGER.trace(
+							"Message before observeOn with sequence {} and direction {}",
+							message.getSequence(),
+							message.getDirection()
+					);
+				})
+				.observeOn(PIPELINE_SCHEDULER)
+				.doOnNext(connectivityMessage -> {
+					LOGGER.debug("Start handling connectivity message {}", connectivityMessage);
+					LOGGER.trace(
+							"Message inside map with sequence {} and direction {}",
+							connectivityMessage.getSequence(),
+							connectivityMessage.getDirection());
+				})
+				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
+				.publish();
 
-                    if (enableMessageSendingEvent && direction == Direction.SECOND) {
-                        subscribeToSendMessage(eventBatchRouter, messageConnectable);
-                    }
-                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize);
+		subscribeToSendMessage(eventBatchRouter, messageConnectable);
 
-                    return messageConnectable;
-                });
+		createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize);
+
+        messageConnectable.connect();
+
+		return messageConnectable;
     }
 
     private static void subscribeToSendMessage(
@@ -284,6 +291,9 @@ public class MicroserviceMain {
                     // Sailfish does not support sending multiple messages at once.
                     // So we should send only a single event here.
                     // But just in case we are wrong, we add checking for sending multiple events
+                    if (connectivityMessage.getDirection() != Direction.SECOND) {
+                        return;
+                    }
                     boolean sent = false;
                     for (IMessage message : connectivityMessage.getSailfishMessages()) {
                         if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
@@ -305,11 +315,10 @@ public class MicroserviceMain {
                 });
     }
 
-    private static void createPackAndPublishPipeline(Direction direction, Flowable<ConnectivityMessage> messageConnectable,
+    private static void createPackAndPublishPipeline(Flowable<ConnectivityMessage> messageConnectable,
             MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize) {
 
-        LOGGER.info("Map group {}", direction);
-        Flowable<ConnectivityBatch> batchConnectable = messageConnectable
+        messageConnectable
                 .doOnNext(message -> LOGGER.trace(
                         "Message before window with sequence {} and direction {}",
                         message.getSequence(),
@@ -326,14 +335,10 @@ public class MicroserviceMain {
                                 .collect(Collectors.toList()));
                     }
                 })
-                .publish()
-                .refCount(1);
-
-        batchConnectable
                 .subscribe(batch -> {
                     try {
                         RawMessageBatch rawBatch = batch.convertToProtoRawBatch();
-                        rawMessageRouter.sendAll(rawBatch, (direction == Direction.FIRST ? QueueAttribute.FIRST : QueueAttribute.SECOND).toString());
+                        rawMessageRouter.send(rawBatch); //FIXME: Only one pin can be used
                     } catch (Exception e) {
                         if (LOGGER.isErrorEnabled()) {
                             LOGGER.error("Cannot send batch with sequences: {}",
@@ -342,9 +347,9 @@ public class MicroserviceMain {
                         }
                     }
                 });
-        LOGGER.info("Subscribed to transfer raw batch group {}", direction);
+        LOGGER.info("Subscribed to transfer raw batch group");
 
-        LOGGER.info("Connected to publish batches group {}", direction);
+        LOGGER.info("Connected to publish batches group");
     }
 
     private interface Disposable {
@@ -453,7 +458,9 @@ public class MicroserviceMain {
             try {
                 LOGGER.info("Subscribed to pipeline");
                 serviceProxy.start();
+                LOGGER.info("Service started. Starting message sender");
                 messageSender.start();
+                LOGGER.info("Subscription finished");
             } catch (Exception e) {
                 LOGGER.error("Services starting failure", e);
                 Exceptions.propagate(e);

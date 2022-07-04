@@ -68,6 +68,8 @@ public class MessageSender {
             throw new IllegalStateException("Already subscribe");
         }
 
+        logger.info("Subscribing to queue with messages to send");
+
         subscriberMonitor = router.subscribeAll(this::handle, SEND_ATTRIBUTE);
     }
 
@@ -102,9 +104,10 @@ public class MessageSender {
         if (!parentEventBookName.isEmpty() && !parentEventBookName.equals(untrackedMessagesRoot.getBookName())) {
             storeErrorEvent(
                     createErrorEvent(String.format(
-                            "Parent event book name is '%s' but should be '%s' for message with session alias '%s' and direction '%s'",
+                            "Parent event book name is '%s' but should be '%s' for message with group '%s', session alias '%s' and direction '%s'",
                             parentEventBookName,
                             untrackedMessagesRoot.getBookName(),
+                            protoMsg.getMetadata().getId().getConnectionId().getSessionGroup(),
                             protoMsg.getMetadata().getId().getConnectionId().getSessionAlias(),
                             protoMsg.getMetadata().getId().getDirection()
                     )),
@@ -119,7 +122,7 @@ public class MessageSender {
                 logger.debug("Message sent. Base64 view: {}", Base64.getEncoder().encodeToString(data));
             }
         } catch (Exception ex) {
-            Event errorEvent = createErrorEvent("SendError")
+            Event errorEvent = createErrorEvent("SendError", ex)
                     .bodyData(EventUtils.createMessageBean("Cannot send message. Message body in base64:"))
                     .bodyData(EventUtils.createMessageBean(Base64.getEncoder().encodeToString(data)));
             EventStoreExtensions.addException(errorEvent, ex);
@@ -140,10 +143,20 @@ public class MessageSender {
         }
     }
 
-    private Event createErrorEvent(String eventType) {
-        return Event.start().endTimestamp()
+    private Event createErrorEvent(String eventType, Exception cause) {
+        Event event = Event.start().endTimestamp()
                 .status(Status.FAILED)
-                .type(eventType);
+                .type(eventType)
+                .name("Failed to send raw message");
+
+        if (cause != null) {
+            event.exception(cause, true);
+        }
+        return event;
+    }
+
+    private Event createErrorEvent(String eventType) {
+        return createErrorEvent(eventType, null);
     }
 
     private IMetadata toSailfishMetadata(RawMessage protoMsg) {

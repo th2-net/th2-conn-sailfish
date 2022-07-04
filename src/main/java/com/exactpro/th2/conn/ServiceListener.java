@@ -27,6 +27,7 @@ import com.exactpro.th2.common.event.Event;
 import com.exactpro.th2.common.event.Event.Status;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.MessageID;
+import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
@@ -78,6 +79,7 @@ public class ServiceListener implements IServiceListener {
     private final Map<Direction, AtomicLong> directionToSequence;
     private final Supplier<MessageID.Builder> idBuilder;
     private final String sessionAlias;
+    private final String sessionGroup;
     private final Subscriber<ConnectivityMessage> subscriber;
     private final EventDispatcher eventDispatcher;
 
@@ -91,28 +93,29 @@ public class ServiceListener implements IServiceListener {
         this.idBuilder = requireNonNull(idBuilder, "Message id builder can't be null");
         MessageID.Builder builder = idBuilder.get();
         this.sessionAlias = requireNonNull(builder.getConnectionId().getSessionAlias(), "Session alias can't be null");
+        this.sessionGroup = builder.getConnectionId().getSessionGroup();
         this.subscriber = requireNonNull(subscriber, "Subscriber can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "Event dispatcher can't be null");
     }
 
     @Override
     public void sessionOpened(IServiceProxy service) {
-        LOGGER.info("Session '{}' opened", sessionAlias);
+        LOGGER.info("Session '{}:{}' opened", sessionGroup, sessionAlias);
     }
 
     @Override
     public void sessionClosed(IServiceProxy service) {
-        LOGGER.info("Session '{}' closed", sessionAlias);
+        LOGGER.info("Session '{}:{}' closed", sessionGroup, sessionAlias);
     }
 
     @Override
     public void sessionIdle(IServiceProxy service, IdleStatus status) {
-        LOGGER.debug("Session '{}' idle", sessionAlias);
+        LOGGER.debug("Session '{}:{}' idle", sessionGroup, sessionAlias);
     }
 
     @Override
     public void exceptionCaught(IServiceProxy service, Throwable cause) {
-        LOGGER.error("Session '{}' threw exception", sessionAlias, cause);
+        LOGGER.error("Session '{}:{}' threw exception", sessionGroup, sessionAlias, cause);
         try {
             Event event = Event
                     .start()
@@ -139,26 +142,28 @@ public class ServiceListener implements IServiceListener {
                 .setDirection(direction)
                 .setSequence(directionToSequence.get(direction).incrementAndGet());
 
-        ConnectivityMessage connectivityMessage;
-        if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
-            connectivityMessage = createConnectivityMessage(new EvolutionBatch(message).getBatch(), messageIdBuilder);
+            ConnectivityMessage connectivityMessage;
+            if (EvolutionBatch.MESSAGE_NAME.equals(message.getName())) {
+                connectivityMessage = createConnectivityMessage(new EvolutionBatch(message).getBatch(), messageIdBuilder);
             } else {
                 connectivityMessage = createConnectivityMessage(List.of(message), messageIdBuilder);
-        }
+            }
             subscriber.onNext(connectivityMessage);
         }
     }
 
     @Override
     public void onEvent(IServiceProxy service, ServiceEvent serviceEvent) {
-        LOGGER.info("Session '{}' emitted service event '{}'", sessionAlias, serviceEvent);
+        LOGGER.info("Session '{}' emitted service event '{}:{}'", sessionGroup, sessionAlias, serviceEvent);
+        String eventName = "Service [" + serviceEvent.getServiceName().getServiceName() + "] emitted event with status " + serviceEvent.getLevel();
         try {
             Event event = Event
                     .start()
                     .endTimestamp()
-                    .name(serviceEvent.getMessage())
+                    .name(eventName)
                     .status(serviceEvent.getLevel() == Level.ERROR ? Status.FAILED : Status.PASSED)
                     .type("Service event")
+                    .bodyData(EventUtils.createMessageBean(serviceEvent.getMessage()))
                     .description(serviceEvent.getDetails());
 
             eventDispatcher.store(EventHolder.createServiceEvent(event));

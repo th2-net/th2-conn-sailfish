@@ -17,6 +17,7 @@ session-alias: "connectivity-alias"
 workspace: "/home/sailfish/workspace"
 type: "th2_service:Your_Service_Type"
 name: "your_service"
+sessionGroup: "group"
 settings:
   param1: "value1"
 ```
@@ -29,6 +30,7 @@ Parameters:
 + settings - the parameters that will be transformed to the actual service's settings specified in the **services.xml** file.
 + maxMessageBatchSize - the limitation for message batch size which connect sends to the first and to the second publish pins with. The default value is set to 100.
 + enableMessageSendingEvent - if this option is set to `true`, connect sends a separate event for every message sent which incomes from the pin with the send attribute. The default value is set to true
++ sessionGroup - parameter will be set for all messsages received or sent by this component
 
 ## Metrics
 
@@ -76,13 +78,13 @@ You need to perform the following steps:
 
 ## Pins
 
-Connect has 2 types of pins for interacting with th2 components.
-Messages that were received from / sent to the target system will be sent to the following queues:
+Connect has only 1 type of pins for interacting with th2 components.
+Messages that were received from / sent to the target system will be sent to the following queue:
 
-- incoming raw messages
-- outgoing raw messages
+- sended raw messages
 
-The "Connect" component uses a separate queue to send messages. The component subscribes to that pin at the start and waits for the messages.
+
+The "Connect" component uses a queue to send messages. The component subscribes to that pin at the start and waits for the messages.
 The messages received from that pin will be sent to the target system.
 Also, this component is responsible for maintaining connections and sessions in the cases where this is provided by the communication protocol.
 Here you can automatically send heartbeat messages, send a logon/logout, requests to retransmit messages in the event of a gap, etc.
@@ -101,17 +103,15 @@ spec:
     workspace: "/home/sailfish/workspace"
     type: "th2_service:Your_Service_Type"
     name: "your_service"
+    sessionGroup: "group"
     maxMessageBatchSize: 100
     enableMessageSendingEvent: true
     settings:
       param1: "value1"
   pins:
-    - name: in_raw
+    - name: send_raw
       connection-type: mq
-      attributes: ["first", "raw", "publish", "store"]
-    - name: out_raw
-      connection-type: mq
-      attributes: ["second", "raw", "publish", "store"]
+      attributes: ["raw", "publish", "store"]
     - name: to_send
       connection-type: mq
       attributes: ["send", "raw", "subscribe"]
@@ -122,6 +122,17 @@ spec:
 ### 4.0.0
 
 + Migration to books/pages cradle 4.0.0
+
+### 3.11.0
+
++ Add session group support from th2:common version 3.38.0-TH2-3578-2300290805-SNAPSHOT. 
++ Replace 2 queues with in/out pins to one queue.
++ Messages are not grouped by direction, both direction publish together.
+
+### 3.10.2
+
++ Events are made more convenient. Added event names and error logs. Error message moved from the name to the body of the event.
++ Use temporal directory for last layer in sailfish's workspace
 
 ### 3.10.1
 

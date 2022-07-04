@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,21 +15,6 @@
  */
 package com.exactpro.th2.conn;
 
-import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
-import static com.exactpro.th2.common.event.EventUtils.toTimestamp;
-import static com.google.protobuf.TextFormat.shortDebugString;
-import static java.util.Objects.requireNonNull;
-import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
@@ -38,12 +23,31 @@ import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageMetadata;
+import com.exactpro.th2.common.grpc.RawMessageMetadata.Builder;
 import com.exactpro.th2.conn.utility.MetadataProperty;
 import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Timestamp;
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
+import static com.google.protobuf.TextFormat.shortDebugString;
+import static java.util.Objects.requireNonNull;
+import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
+
+@SuppressWarnings("ClassNamePrefixedWithPackageName")
 public class ConnectivityMessage {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityMessage.class);
+    public static final long MILLISECONDS_IN_SECOND = 1_000L;
+    public static final long NANOSECONDS_IN_MILLISECOND = 1_000_000L;
 
     private final List<IMessage> sailfishMessages;
     private final MessageID messageId;
@@ -57,9 +61,10 @@ public class ConnectivityMessage {
                     shortDebugString(messageIdBuilder)
             ));
         }
-        this.sailfishMessages = Collections.unmodifiableList(sailfishMessages);
+        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Message can't be null"));
+        LOGGER.warn("Sailfish transforms th2 message to real send message too slow, delay is about 10 milliseconds. Please add more hardware resources");
         this.messageId = messageIdBuilder
-                .setTimestamp(toTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().toInstant()))
+                .setTimestamp(createTimestamp())
                 .build();
     }
 
@@ -69,8 +74,8 @@ public class ConnectivityMessage {
             throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
         }
 
-        RawMessage.Builder rawMessageBuilder = RawMessage.newBuilder();
-        RawMessageMetadata.Builder rawMessageMetadataBuilder = RawMessageMetadata.newBuilder().setId(messageId);
+        RawMessage.Builder messageBuilder = RawMessage.newBuilder();
+        Builder metadataBuilder = RawMessageMetadata.newBuilder().setId(messageId);
         byte[] bodyData = new byte[totalSize];
         int index = 0;
         for (IMessage message : sailfishMessages) {
@@ -78,12 +83,12 @@ public class ConnectivityMessage {
             if (SailfishMetadataExtensions.contains(sfMetadata, MetadataProperty.PARENT_EVENT_ID)) {
                 EventID parentEventID = SailfishMetadataExtensions.getParentEventID(sfMetadata);
                 // Should never happen because the Sailfish does not support sending multiple messages at once
-                if (rawMessageBuilder.hasParentEventId()) {
-                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageId, rawMessageBuilder.getParentEventId(), parentEventID);
+                if (messageBuilder.hasParentEventId()) {
+                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageId, messageBuilder.getParentEventId(), parentEventID);
                 }
-                rawMessageBuilder.setParentEventId(parentEventID);
+                messageBuilder.setParentEventId(parentEventID);
             }
-            rawMessageMetadataBuilder.putAllProperties(defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap()));
+            metadataBuilder.putAllProperties(defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap()));
 
             byte[] rawMessage = MetadataExtensions.getRawMessage(sfMetadata);
             if (rawMessage == null) {
@@ -94,7 +99,7 @@ public class ConnectivityMessage {
             index += rawMessage.length;
         }
 
-        return rawMessageBuilder.setMetadata(rawMessageMetadataBuilder)
+        return messageBuilder.setMetadata(metadataBuilder)
                 .setBody(ByteString.copyFrom(bodyData))
                 .build();
     }
@@ -106,7 +111,7 @@ public class ConnectivityMessage {
     public String getBookName() {
         return messageId.getBookName();
     }
-    
+
     public String getSessionAlias() {
         return messageId.getConnectionId().getSessionAlias();
     }
@@ -137,5 +142,13 @@ public class ConnectivityMessage {
                     byte[] rawMessage = MetadataExtensions.getRawMessage(it.getMetaData());
                     return rawMessage == null ? 0 : rawMessage.length;
                 }).sum();
+    }
+
+    private static Timestamp createTimestamp() {
+        Instant now = Instant.now();
+        return Timestamp.newBuilder()
+                .setSeconds(now.getEpochSecond())
+                .setNanos(now.getNano())
+                .build();
     }
 }
