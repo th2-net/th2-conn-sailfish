@@ -13,19 +13,21 @@
 
 package com.exactpro.th2.conn.configuration;
 
-import java.util.Map;
-
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.Map;
 
 public class ConnectivityConfiguration {
     private boolean enableMessageSendingEvent = true;
 
     private int maxMessageBatchSize = 100;
 
+    private int maxMessageRate = Integer.MAX_VALUE;
+
     @JsonProperty(value = "session-alias", required = true)
     private String sessionAlias;
 
-    @JsonProperty(value = "workspace",required = true)
+    @JsonProperty(value = "workspace", required = true)
     private String workspaceFolder;
 
     @JsonProperty(required = true)
@@ -43,6 +45,10 @@ public class ConnectivityConfiguration {
 
     public int getMaxMessageBatchSize() {
         return maxMessageBatchSize;
+    }
+
+    public int getMaxMessageRate() {
+        return maxMessageRate;
     }
 
     public String getSessionAlias() {

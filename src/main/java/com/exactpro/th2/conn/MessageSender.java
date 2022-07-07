@@ -15,15 +15,6 @@
  */
 package com.exactpro.th2.conn;
 
-import static java.util.Objects.requireNonNull;
-
-import java.io.IOException;
-import java.util.Base64;
-import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
 import com.exactpro.sf.common.messages.impl.Metadata;
@@ -40,8 +31,15 @@ import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
-
 import io.reactivex.rxjava3.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Base64;
+import java.util.Map;
+
+import static java.util.Objects.requireNonNull;
 
 public class MessageSender {
     private static final String SEND_ATTRIBUTE = "send";
@@ -50,16 +48,26 @@ public class MessageSender {
     private final MessageRouter<RawMessageBatch> router;
     private final EventDispatcher eventDispatcher;
     private final EventID untrackedMessagesRoot;
+    private final RateLimiter rateLimiter;
     private volatile SubscriberMonitor subscriberMonitor;
 
     public MessageSender(IServiceProxy serviceProxy,
                          MessageRouter<RawMessageBatch> router,
                          EventDispatcher eventDispatcher,
                          EventID untrackedMessagesRoot) {
+        this(serviceProxy, router, eventDispatcher, untrackedMessagesRoot, Integer.MAX_VALUE);
+    }
+
+    public MessageSender(IServiceProxy serviceProxy,
+                         MessageRouter<RawMessageBatch> router,
+                         EventDispatcher eventDispatcher,
+                         EventID untrackedMessagesRoot,
+                         int maxMessageRate) {
         this.serviceProxy = requireNonNull(serviceProxy, "Service proxy can't be null");
         this.router = requireNonNull(router, "Message router can't be null");
         this.eventDispatcher = requireNonNull(eventDispatcher, "'Event dispatcher' can't be null");
         this.untrackedMessagesRoot = requireNonNull(untrackedMessagesRoot, "'untrackedMessagesRoot' can't be null");
+        this.rateLimiter = new RateLimiter(maxMessageRate);
     }
 
     public void start() {
@@ -86,6 +94,7 @@ public class MessageSender {
     private void handle(String consumerTag, RawMessageBatch messageBatch) {
         for (RawMessage protoMessage : messageBatch.getMessagesList()) {
             try {
+                rateLimiter.acquire();
                 sendMessage(protoMessage);
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", consumerTag, e);

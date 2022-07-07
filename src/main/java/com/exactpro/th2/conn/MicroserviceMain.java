@@ -15,35 +15,6 @@
  */
 package com.exactpro.th2.conn;
 
-import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
-import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
-import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
-import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
-import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
-import static java.util.Objects.requireNonNull;
-import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
-import static org.apache.commons.lang.StringUtils.repeat;
-import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
-import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.time.Instant;
-import java.util.Deque;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.exactpro.sf.common.messages.IMessage;
 import com.exactpro.sf.common.services.ServiceName;
 import com.exactpro.sf.comparison.conversion.ConversionException;
@@ -71,7 +42,6 @@ import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventType;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
@@ -80,6 +50,34 @@ import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
 import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.time.Instant;
+import java.util.Deque;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
+import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
+import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
+import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
+import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
+import static java.util.Objects.requireNonNull;
+import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
+import static org.apache.commons.lang.StringUtils.repeat;
+import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
+import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 public class MicroserviceMain {
     private static final Logger LOGGER = LoggerFactory.getLogger(MicroserviceMain.class);
@@ -174,8 +172,11 @@ public class MicroserviceMain {
 
             MessageRouter<RawMessageBatch> rawMessageRouter = factory.getMessageRouterRawBatch();
 
-            MessageSender messageSender = new MessageSender(serviceProxy, rawMessageRouter, eventDispatcher,
-                    EventID.newBuilder().setId(untrackedSentMessages.getId()).build()
+            MessageSender messageSender = new MessageSender(serviceProxy,
+                    rawMessageRouter,
+                    eventDispatcher,
+                    EventID.newBuilder().setId(untrackedSentMessages.getId()).build(),
+                    configuration.getMaxMessageRate()
             );
             disposer.register(() -> {
                 LOGGER.info("Stop 'message send' listener");

@@ -1,4 +1,4 @@
-# Connect (3.10.2)
+# Connect (3.11.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -28,6 +28,7 @@ Parameters:
 + name - the service name that will be displayed in the events inside the report;
 + settings - the parameters that will be transformed to the actual service's settings specified in the **services.xml** file.
 + maxMessageBatchSize - the limitation for message batch size which connect sends to the first and to the second publish pins with. The default value is set to 100.
++ maxMessageRate - max outgoing message rate in messages per second
 + enableMessageSendingEvent - if this option is set to `true`, connect sends a separate event for every message sent which incomes from the pin with the send attribute. The default value is set to true
 
 ## Metrics
@@ -102,22 +103,27 @@ spec:
     type: "th2_service:Your_Service_Type"
     name: "your_service"
     maxMessageBatchSize: 100
+    maxMessageRate: 100000
     enableMessageSendingEvent: true
     settings:
       param1: "value1"
   pins:
     - name: in_raw
       connection-type: mq
-      attributes: ["first", "raw", "publish", "store"]
+      attributes: [ "first", "raw", "publish", "store" ]
     - name: out_raw
       connection-type: mq
-      attributes: ["second", "raw", "publish", "store"]
+      attributes: [ "second", "raw", "publish", "store" ]
     - name: to_send
       connection-type: mq
-      attributes: ["send", "raw", "subscribe"]
+      attributes: [ "send", "raw", "subscribe" ]
 ```
 
 ## Release notes
+
+### 3.11.0
+
++ Outgoing message rate now can be limited via `maxMessageRate` setting
 
 ### 3.10.2
 
