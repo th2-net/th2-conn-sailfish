@@ -64,9 +64,9 @@ compileTestKotlin {
 }
 
 dependencies {
-    api platform('com.exactpro.th2:bom:3.0.0')
+    api platform('com.exactpro.th2:bom:3.2.0')
 
-    implementation 'com.exactpro.th2:common:4.0.0-th2-2150-books-pages-2569520293-SNAPSHOT' //FIXME: Use a version without log4j:1 dependecy
+    implementation 'com.exactpro.th2:common:4.0.0-th2-2150-books-pages-2629057923-SNAPSHOT'
     implementation "com.exactpro.th2:sailfish-utils:3.8.0"
 
     implementation "org.slf4j:slf4j-log4j12"
