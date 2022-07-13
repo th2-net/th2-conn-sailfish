@@ -16,49 +16,29 @@
 
 package com.exactpro.th2.conn
 
-import java.lang.Double.min
 import java.util.concurrent.TimeUnit.SECONDS
-import java.util.concurrent.locks.LockSupport
+import java.util.concurrent.locks.LockSupport.parkNanos
 import javax.annotation.concurrent.ThreadSafe
 
 @ThreadSafe
-class RateLimiter(rate: Int) {
-    init {
-        require(rate > 0) { "rate must be positive" }
+class RateLimiter(rate: Int, refillsPerSecond: Int) {
+    constructor(rate: Int) : this(rate, 10)
+
+    private var tokens = 0L
+    private val maxTokens = rate / refillsPerSecond
+    private var nextRefillTime = 0L
+    private val refillInterval = SECONDS.toNanos(1) / refillsPerSecond
+
+    fun acquire() {
+        while (!tryAcquire()) parkNanos(1_000)
     }
 
-    private val maxPermits = rate.toDouble()
-    private val permitDuration = SECONDS.toNanos(1) / maxPermits
-    private var freePermits = 0.0
-    private var syncTime = 0L
-
-    fun acquire() = acquire(1)
-
-    fun acquire(permits: Int) {
-        var currentTime = System.nanoTime()
-        val waitUntilTime = getWaitUntilTime(permits, currentTime)
-
-        while (waitUntilTime > currentTime) {
-            LockSupport.parkNanos(waitUntilTime - currentTime)
-            currentTime = System.nanoTime()
-        }
-    }
-
-    private fun getWaitUntilTime(permits: Int, currentTime: Long): Long = synchronized(this) {
-        if (currentTime > syncTime) {
-            val newPermits = (currentTime - syncTime) / permitDuration
-            freePermits = min(maxPermits, freePermits + newPermits)
-            syncTime = currentTime
-        }
-
-        val waitUntilTime = syncTime
-        val stalePermits = min(permits.toDouble(), freePermits)
-        val freshPermits = permits - stalePermits
-        val syncTimeOffset = (freshPermits * permitDuration).toLong()
-
-        syncTime += syncTimeOffset
-        freePermits -= stalePermits
-
-        return waitUntilTime
+    fun tryAcquire(): Boolean = synchronized(this) {
+        if (tokens++ < maxTokens) return true
+        val currentTime = System.nanoTime()
+        if (currentTime < nextRefillTime) return false
+        nextRefillTime = currentTime + refillInterval
+        tokens = 1
+        return true
     }
 }
