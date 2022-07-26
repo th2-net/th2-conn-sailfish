@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -411,17 +412,47 @@ public class MicroserviceMain {
                 settings.setParameterValue(settingName, castValue);
             }
 
-            for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
-                var dictionaryType = com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name());
-                try (InputStream stream = commonFactory.readDictionary(dictionaryType)) {
-                    SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
-                    settings.setDictionary(sfDictionaryType, uri);
-                }
-            }
+            loadDictionaries(serviceFactory, commonFactory, configuration, settings);
 
             return service;
         } catch (ConversionException | ServiceFactoryException e) {
             throw new RuntimeException(String.format("Could not load service '%s'", configuration.getName()), e);
+        }
+    }
+
+    private static void loadDictionaries(IServiceFactory serviceFactory, CommonFactory commonFactory, ConnectivityConfiguration configuration, ISettingsProxy settings) throws IOException, ServiceFactoryException {
+        var dictionariesToAliasMap = configuration.getDictionariesToAliasMap();
+        if (dictionariesToAliasMap != null && !dictionariesToAliasMap.isEmpty()) {
+            loadDictionariesByAliases(serviceFactory, commonFactory, settings, dictionariesToAliasMap);
+        } else {
+            loadDictionariesByTypes(serviceFactory, commonFactory, settings);
+        }
+    }
+
+    private static void loadDictionariesByTypes(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings) throws IOException, ServiceFactoryException {
+        for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
+            var dictionaryType = com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name());
+            try (InputStream stream = commonFactory.readDictionary(dictionaryType)) {
+                SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
+                settings.setDictionary(sfDictionaryType, uri);
+            }
+        }
+    }
+
+    private static void loadDictionariesByAliases(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings, Map<String, String> dictionariesToAliasMap) throws IOException, ServiceFactoryException {
+        Set<String> commonDictionaryAliases = commonFactory.getDictionaryAliases();
+        for (Entry<String, String> entry : dictionariesToAliasMap.entrySet()) {
+            DictionaryType sfDictionaryType = DictionaryType.valueOf(entry.getKey());
+            String dictionaryAlias = entry.getValue();
+            var contains = commonDictionaryAliases.contains(dictionaryAlias);
+            if (contains) {
+                try (InputStream inputStream = commonFactory.loadDictionary(dictionaryAlias)) {
+                    SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), inputStream, true);
+                    settings.setDictionary(sfDictionaryType, uri);
+                }
+            } else {
+                throw new IllegalArgumentException(String.format("Could not find dictionary with alias '%s'", dictionaryAlias));
+            }
         }
     }
 

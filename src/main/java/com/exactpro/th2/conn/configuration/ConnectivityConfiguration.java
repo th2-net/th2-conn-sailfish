@@ -37,6 +37,9 @@ public class ConnectivityConfiguration {
     @JsonProperty(required = true)
     private Map<String, Object> settings;
 
+    @JsonProperty(value = "dictionaries")
+    private Map<String, String> dictionariesToAliasMap;
+
     private String sessionGroup;
 
     public boolean isEnableMessageSendingEvent() {
@@ -70,4 +73,8 @@ public class ConnectivityConfiguration {
 	public String getSessionGroup() {
 		return sessionGroup;
 	}
+
+    public Map<String, String> getDictionariesToAliasMap() {
+        return dictionariesToAliasMap;
+    }
 }
