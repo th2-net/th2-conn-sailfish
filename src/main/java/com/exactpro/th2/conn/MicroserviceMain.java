@@ -430,6 +430,7 @@ public class MicroserviceMain {
     }
 
     private static void loadDictionariesByTypes(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings) throws IOException, ServiceFactoryException {
+        LOGGER.debug("Loading dictionaries by types...");
         for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
             var dictionaryType = com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name());
             try (InputStream stream = commonFactory.readDictionary(dictionaryType)) {
@@ -441,11 +442,14 @@ public class MicroserviceMain {
 
     private static void loadDictionariesByAliases(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings, Map<String, String> dictionariesToAliasMap) throws IOException, ServiceFactoryException {
         Set<String> commonDictionaryAliases = commonFactory.getDictionaryAliases();
+        LOGGER.debug("Loading dictionaries by aliases...");
         for (Entry<String, String> entry : dictionariesToAliasMap.entrySet()) {
             DictionaryType sfDictionaryType = DictionaryType.valueOf(entry.getKey());
             String dictionaryAlias = entry.getValue();
             var contains = commonDictionaryAliases.contains(dictionaryAlias);
             if (contains) {
+                // todo remove logging
+                LOGGER.debug(String.format("Reading alias '%s'...", dictionaryAlias));
                 try (InputStream inputStream = commonFactory.loadDictionary(dictionaryAlias)) {
                     SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), inputStream, true);
                     settings.setDictionary(sfDictionaryType, uri);
