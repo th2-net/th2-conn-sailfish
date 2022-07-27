@@ -440,18 +440,14 @@ public class MicroserviceMain {
         }
     }
 
-    // todo remove logging
     private static void loadDictionariesByAliases(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings, Map<String, String> dictionariesToAliasMap) throws IOException, ServiceFactoryException {
         Set<String> commonDictionaryAliases = commonFactory.getDictionaryAliases();
         LOGGER.debug("Loading dictionaries by aliases...");
-        LOGGER.debug("Dictionaries aliases is " + String.join(",", commonDictionaryAliases));
         for (Entry<String, String> entry : dictionariesToAliasMap.entrySet()) {
             DictionaryType sfDictionaryType = DictionaryType.valueOf(entry.getKey());
             String dictionaryAlias = entry.getValue();
-            LOGGER.debug(String.format("Dictionary with alias %s and type %s", dictionaryAlias, sfDictionaryType.name()));
             var contains = commonDictionaryAliases.contains(dictionaryAlias);
             if (contains) {
-                LOGGER.debug(String.format("Reading alias '%s'...", dictionaryAlias));
                 try (InputStream inputStream = commonFactory.loadDictionary(dictionaryAlias)) {
                     SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), inputStream, true);
                     settings.setDictionary(sfDictionaryType, uri);
