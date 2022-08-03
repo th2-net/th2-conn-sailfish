@@ -34,7 +34,7 @@ Parameters:
 + maxMessageBatchSize - the limitation for message batch size which connect sends to the first and to the second publish pins with. The default value is set to 100.
 + enableMessageSendingEvent - if this option is set to `true`, connect sends a separate event for every message sent which incomes from the pin with the send attribute. The default value is set to true
 + sessionGroup - parameter will be set for all messages received or sent by this component
-+ dictionaries - (optional) dictionaries will be picked up based on its aliases
++ dictionaries - (optional) dictionaries will be picked up based on its aliases. Exception will be thrown in case of wrong configuration.
 
 ## Metrics
 

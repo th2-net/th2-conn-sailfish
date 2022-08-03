@@ -441,19 +441,23 @@ public class MicroserviceMain {
     }
 
     private static void loadDictionariesByAliases(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings, Map<String, String> dictionariesToAliasMap) throws IOException, ServiceFactoryException {
-        Set<String> commonDictionaryAliases = commonFactory.getDictionaryAliases();
-        LOGGER.debug("Loading dictionaries by aliases...");
-        for (Entry<String, String> entry : dictionariesToAliasMap.entrySet()) {
-            DictionaryType sfDictionaryType = DictionaryType.valueOf(entry.getKey());
-            String dictionaryAlias = entry.getValue();
-            var contains = commonDictionaryAliases.contains(dictionaryAlias);
-            if (contains) {
-                try (InputStream inputStream = commonFactory.loadDictionary(dictionaryAlias)) {
-                    SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), inputStream, true);
-                    settings.setDictionary(sfDictionaryType, uri);
+        LOGGER.debug("Loading dictionaries by aliases");
+        for (DictionaryType dictionaryTypeFromSettings : settings.getDictionaryTypes()) {
+            var typeWithAliasFromConfig = dictionariesToAliasMap.entrySet().stream()
+                    .filter(entry -> entry.getKey().compareToIgnoreCase(dictionaryTypeFromSettings.toString()) == 0)
+                    .findAny();
+
+            if (typeWithAliasFromConfig.isPresent()) {
+                String alias = typeWithAliasFromConfig.get().getValue();
+                try (InputStream inputStream = commonFactory.loadDictionary(alias)) {
+                    SailfishURI uri = serviceFactory.registerDictionary(dictionaryTypeFromSettings.name(), inputStream, true);
+                    settings.setDictionary(dictionaryTypeFromSettings, uri);
                 }
             } else {
-                throw new IllegalArgumentException(String.format("Could not find dictionary with alias '%s'", dictionaryAlias));
+                String foundedTypes = dictionariesToAliasMap.entrySet().stream().map(entry -> entry.getKey() + " with alias " + entry.getValue()).collect(Collectors.joining(", "));
+                String expectedTypes = settings.getDictionaryTypes().stream().map(Enum::toString).collect(Collectors.joining(", "));
+                LOGGER.error("Dictionary with type {} not found in the config. Expected: {}, found {}", dictionaryTypeFromSettings, expectedTypes, foundedTypes);
+                throw new IllegalArgumentException("Dictionary type " + dictionaryTypeFromSettings + " can't be loaded");
             }
         }
     }
