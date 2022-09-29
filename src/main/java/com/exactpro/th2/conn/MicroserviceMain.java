@@ -84,7 +84,6 @@ import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 public class MicroserviceMain {
     private static final Logger LOGGER = LoggerFactory.getLogger(MicroserviceMain.class);
 
-    public static final int MAX_MESSAGES_COUNT = 100;
     public static final long NANOSECONDS_IN_SECOND = 1_000_000_000L;
     public static final String PASSWORD_PARAMETER = "password";
     public static final String DEFAULT_PASSWORD_PARAMETER = "default";
@@ -183,7 +182,7 @@ public class MicroserviceMain {
             });
 
             createPipeline(processor, processor::onComplete, eventBatchRouter, rawMessageRouter,
-                    configuration.getMaxMessageBatchSize(), configuration.isEnableMessageSendingEvent())
+                    configuration.getMaxMessageBatchSize(), configuration.getMaxMessageFlushTime(), configuration.isEnableMessageSendingEvent())
                     .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
@@ -213,7 +212,9 @@ public class MicroserviceMain {
             Flowable<ConnectivityMessage> flowable, Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
             MessageRouter<RawMessageBatch> rawMessageRouter,
-            int maxMessageBatchSize, boolean enableMessageSendingEvent) {
+            int maxMessageBatchSize,
+            long maxMessageFlushTime,
+            boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
         return flowable
@@ -240,7 +241,7 @@ public class MicroserviceMain {
                     if (enableMessageSendingEvent && direction == Direction.SECOND) {
                         subscribeToSendMessage(eventBatchRouter, messageConnectable);
                     }
-                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize);
+                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize, maxMessageFlushTime);
 
                     return messageConnectable;
                 });
@@ -275,7 +276,7 @@ public class MicroserviceMain {
     }
 
     private static void createPackAndPublishPipeline(Direction direction, Flowable<ConnectivityMessage> messageConnectable,
-            MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize) {
+            MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize, long maxMessageFlushTime) {
 
         LOGGER.info("Map group {}", direction);
         Flowable<ConnectivityBatch> batchConnectable = messageConnectable
@@ -284,7 +285,7 @@ public class MicroserviceMain {
                         message.getSequence(),
                         message.getDirection()
                 ))
-                .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, maxMessageBatchSize)
+                .window(maxMessageFlushTime, TimeUnit.MILLISECONDS, PIPELINE_SCHEDULER, maxMessageBatchSize)
                 .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
                 .map(ConnectivityBatch::new)
