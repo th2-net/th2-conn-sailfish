@@ -1,12 +1,12 @@
 plugins {
     id 'com.palantir.docker' version '0.25.0'
-    id 'org.jetbrains.kotlin.jvm' version '1.5.30'
+    id 'org.jetbrains.kotlin.jvm' version '1.6.21'
     id 'application'
 }
 
 ext {
     sharedDir                       = file("${project.rootDir}/shared")
-    sailfishVersion                 = '3.2.1741'
+    sailfishVersion                 = '3.3.13'
 }
 
 group = 'com.exactpro.th2'
@@ -17,19 +17,35 @@ repositories {
         name 'MavenLocal'
         url sharedDir
     }
-    
-    mavenCentral()
+
+    // ignoreGradleMetadataRedirection is used for sonatype because
+    // Sailfish dependencies have constrains that interfere with our BOM
+    // so we exclude Gradle metadata for this repositories
 
     maven {
         name 'Sonatype_snapshots'
         url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+        metadataSources {
+            mavenPom()
+            artifact()
+            ignoreGradleMetadataRedirection()
+        }
     }
-
     maven {
         name 'Sonatype_releases'
         url 'https://s01.oss.sonatype.org/content/repositories/releases/'
+        metadataSources {
+            mavenPom()
+            artifact()
+            ignoreGradleMetadataRedirection()
+        }
     }
-
+    mavenCentral {
+        metadataSources {
+            mavenPom()
+            artifact()
+        }
+    }
     mavenLocal()
 
     configurations.all {
@@ -64,12 +80,11 @@ compileTestKotlin {
 }
 
 dependencies {
-    api platform('com.exactpro.th2:bom:3.0.0')
+    api platform('com.exactpro.th2:bom:4.0.1')
 
-    implementation 'com.exactpro.th2:common:3.33.0'
-    implementation "com.exactpro.th2:sailfish-utils:3.8.0"
+    implementation 'com.exactpro.th2:common:3.42.0-dev-3174619150-SNAPSHOT'
+    implementation 'com.exactpro.th2:sailfish-utils:3.13.0-dev-3204703314-SNAPSHOT'
 
-    implementation "org.slf4j:slf4j-log4j12"
     implementation "org.slf4j:slf4j-api"
 
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
@@ -78,7 +93,10 @@ dependencies {
 
     implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}")
 
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    testImplementation('org.apache.logging.log4j:log4j-slf4j-impl') {
+        because('logging in testing')
+    }
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.0'
 }
 
 test {
@@ -86,13 +104,13 @@ test {
 }
 
 application {
-    mainClassName 'com.exactpro.th2.conn.MicroserviceMain'
+    mainClass.set('com.exactpro.th2.conn.MicroserviceMain')
 }
 
 applicationName = 'service'
 
 distTar {
-    archiveName "${applicationName}.tar"
+    archiveFileName.set("${applicationName}.tar")
 }
 
 dockerPrepare {
