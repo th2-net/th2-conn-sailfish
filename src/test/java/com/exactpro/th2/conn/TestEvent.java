@@ -56,8 +56,9 @@ public class TestEvent {
     private static String parentId;
 
     @BeforeAll
-    public static void initMessages() throws IOException {
+    static void initMessages() throws IOException {
         serviceProxy = mock(IServiceProxy.class);
+        @SuppressWarnings("unchecked")
         MessageRouter<RawMessageBatch> router = mock(MessageRouter.class);
 
         doAnswer(invocation -> {
@@ -72,7 +73,7 @@ public class TestEvent {
             EventType eventType = eventHolder.getType();
 
             eventDispatcher.store(eventHolder.getEvent(),
-                    parentIds.get(eventType) != null ? parentIds.get(eventType) : rootID);
+                    parentIds.get(eventType) == null ? rootID : parentIds.get(eventType));
             return null;
         }).when(eventDispatcher).store(any());
 
@@ -88,7 +89,7 @@ public class TestEvent {
     }
 
     @AfterEach
-    public void clear() {
+    void clear() {
         event = null;
         parentId = null;
     }
@@ -147,7 +148,7 @@ public class TestEvent {
     }
 
     @AfterAll
-    private static void close() throws IOException {
+    static void close() throws IOException {
         messageSender.stop();
     }
 }

@@ -124,6 +124,8 @@ spec:
 ### 3.11.0
 
 + Added `maxMessageFlushTime` option
++ Dependencies with vulnerabilities were updated:
+  + Sailfish updated from `3.2.1741` to `3.3.13`
 
 ### 3.10.2
 
