@@ -234,7 +234,7 @@ public class MicroserviceMain {
 				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
 				.publish();
 
-		if (enableMessageSendingEvent) {
+	if (enableMessageSendingEvent) {
             subscribeToSendMessage(eventBatchRouter, messageConnectable);
         }
 
