@@ -208,41 +208,41 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<ConnectivityMessage> createPipeline(
+    private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(
             Flowable<ConnectivityMessage> flowable, Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
             MessageRouter<RawMessageBatch> rawMessageRouter,
             int maxMessageBatchSize, boolean enableMessageSendingEvent) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-		ConnectableFlowable<ConnectivityMessage> messageConnectable = flowable
-				.doOnNext(message -> {
-					LOGGER.trace(
-							"Message before observeOn with sequence {} and direction {}",
-							message.getSequence(),
-							message.getDirection()
-					);
-				})
-				.observeOn(PIPELINE_SCHEDULER)
-				.doOnNext(connectivityMessage -> {
-					LOGGER.debug("Start handling connectivity message {}", connectivityMessage);
-					LOGGER.trace(
-							"Message inside map with sequence {} and direction {}",
-							connectivityMessage.getSequence(),
-							connectivityMessage.getDirection());
-				})
-				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
-				.publish();
+        return flowable
+                .doOnNext(message -> LOGGER.trace(
+                        "Message before observeOn with sequence {} and direction {}",
+                        message.getSequence(),
+                        message.getDirection()
+                ))
+                .observeOn(PIPELINE_SCHEDULER)
+                .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
+                .groupBy(ConnectivityMessage::getDirection)
+                .map(group -> {
+                    @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
+                    Flowable<ConnectivityMessage> messageConnectable = group
+                            .doOnNext(message -> LOGGER.trace(
+                                    "Message inside map with sequence {} and direction {}",
+                                    message.getSequence(),
+                                    message.getDirection()
+                            ))
+                            .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
+                            .publish()
+                            .refCount(enableMessageSendingEvent && direction == Direction.SECOND ? 2 : 1);
 
-		if (enableMessageSendingEvent && message.getDirection() == Direction.SECOND) {
-                	subscribeToSendMessage(eventBatchRouter, messageConnectable);
-                }
+                    if (enableMessageSendingEvent && direction == Direction.SECOND) {
+                        subscribeToSendMessage(eventBatchRouter, messageConnectable);
+                    }
+                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize);
 
-		createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize);
-
-        messageConnectable.connect();
-
-		return messageConnectable;
+                    return messageConnectable;
+                });
     }
 
     private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, Flowable<ConnectivityMessage> messageConnectable) {
