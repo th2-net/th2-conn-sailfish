@@ -126,6 +126,7 @@ spec:
 ### 4.0.0
 
 + Migration to books/pages cradle 4.0.0
++ Migrated to sailfish 3.3
 + Added ability to define dictionaries via custom config in based on sailfish adapters
 
 ### 3.11.0

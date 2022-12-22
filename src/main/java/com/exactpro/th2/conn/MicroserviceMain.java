@@ -83,8 +83,6 @@ import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 
 public class MicroserviceMain {
     private static final Logger LOGGER = LoggerFactory.getLogger(MicroserviceMain.class);
-
-    public static final int MAX_MESSAGES_COUNT = 100;
     public static final long NANOSECONDS_IN_SECOND = 1_000_000_000L;
     public static final String PASSWORD_PARAMETER = "password";
     public static final String DEFAULT_PASSWORD_PARAMETER = "default";
@@ -210,6 +208,7 @@ public class MicroserviceMain {
             });
 
             createPipeline(
+                    PIPELINE_SCHEDULER,
                     processor,
                     processor::onComplete,
                     eventBatchRouter,
@@ -242,6 +241,7 @@ public class MicroserviceMain {
     }
 
     public static @NonNull Flowable<ConnectivityMessage> createPipeline(
+            Scheduler scheduler,
             Flowable<ConnectivityMessage> flowable,
             Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
@@ -257,7 +257,7 @@ public class MicroserviceMain {
                         message.getSequence(),
                         message.getDirection()
                 ))
-				.observeOn(PIPELINE_SCHEDULER)
+				.observeOn(scheduler)
 				.doOnNext(connectivityMessage -> {
 					LOGGER.debug("Start handling connectivity message {}", connectivityMessage);
 					LOGGER.trace(
@@ -268,9 +268,11 @@ public class MicroserviceMain {
 				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
 				.publish();
 
-		subscribeToSendMessage(eventBatchRouter, messageConnectable, enableMessageSendingEvent);
+        if (enableMessageSendingEvent) {
+            subscribeToSendMessage(eventBatchRouter, messageConnectable);
+        }
 
-		createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize);
+		createPackAndPublishPipeline(scheduler, messageConnectable, rawMessageRouter, maxMessageBatchSize);
 
         messageConnectable.connect();
 
@@ -279,8 +281,8 @@ public class MicroserviceMain {
 
     private static void subscribeToSendMessage(
             MessageRouter<EventBatch> eventBatchRouter,
-            Flowable<ConnectivityMessage> messageConnectable,
-            boolean enableMessageSendingEvent) {
+            Flowable<ConnectivityMessage> messageConnectable
+    ) {
         //noinspection ResultOfMethodCallIgnored
         messageConnectable
                 .subscribe(connectivityMessage -> {
@@ -314,16 +316,19 @@ public class MicroserviceMain {
                 });
     }
 
-    private static void createPackAndPublishPipeline(Flowable<ConnectivityMessage> messageConnectable,
-            MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize) {
-
+    private static void createPackAndPublishPipeline(
+            Scheduler scheduler,
+            Flowable<ConnectivityMessage> messageConnectable,
+            MessageRouter<RawMessageBatch> rawMessageRouter,
+            int maxMessageBatchSize
+    ) {
         messageConnectable
                 .doOnNext(message -> LOGGER.trace(
                         "Message before window with sequence {} and direction {}",
                         message.getSequence(),
                         message.getDirection()
                 ))
-                .window(1, TimeUnit.SECONDS, PIPELINE_SCHEDULER, maxMessageBatchSize)
+                .window(1, TimeUnit.SECONDS, scheduler, maxMessageBatchSize)
                 .concatMapSingle(Flowable::toList)
                 .filter(list -> !list.isEmpty())
                 .map(ConnectivityBatch::new)
