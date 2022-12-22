@@ -22,6 +22,7 @@ import com.exactpro.th2.common.grpc.EventBatch;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
+import com.exactpro.th2.common.schema.message.DeliveryMetadata;
 import com.exactpro.th2.common.schema.message.MessageListener;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
@@ -100,7 +101,7 @@ public class TestEvent {
                 .build();
 
         doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
-        messageListener.handle("stubValue", rawMessageBatch);
+        messageListener.handle(new DeliveryMetadata("stubValue", false), rawMessageBatch);
     }
 
     @Test
@@ -129,7 +130,7 @@ public class TestEvent {
                 ).build();
 
         doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
-        messageListener.handle("stubValue", rawMessageBatch);
+        messageListener.handle(new DeliveryMetadata("stubValue", false), rawMessageBatch);
 
         event.addSubEvent(Event.start());
 

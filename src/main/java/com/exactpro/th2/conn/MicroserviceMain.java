@@ -33,7 +33,6 @@ import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -125,7 +124,7 @@ public class MicroserviceMain {
 
             FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
             disposer.register(() -> {
-                LOGGER.info("Complite pipeline publisher");
+                LOGGER.info("Complete pipeline publisher");
                 processor.onComplete();
             });
 
@@ -242,7 +241,7 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<ConnectivityMessage> createPipeline(
+    public static @NonNull Flowable<ConnectivityMessage> createPipeline(
             Flowable<ConnectivityMessage> flowable,
             Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
@@ -253,13 +252,11 @@ public class MicroserviceMain {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
 		ConnectableFlowable<ConnectivityMessage> messageConnectable = flowable
-				.doOnNext(message -> {
-					LOGGER.trace(
-							"Message before observeOn with sequence {} and direction {}",
-							message.getSequence(),
-							message.getDirection()
-					);
-				})
+				.doOnNext(message -> LOGGER.trace(
+                        "Message before observeOn with sequence {} and direction {}",
+                        message.getSequence(),
+                        message.getDirection()
+                ))
 				.observeOn(PIPELINE_SCHEDULER)
 				.doOnNext(connectivityMessage -> {
 					LOGGER.debug("Start handling connectivity message {}", connectivityMessage);
@@ -271,7 +268,7 @@ public class MicroserviceMain {
 				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
 				.publish();
 
-		subscribeToSendMessage(eventBatchRouter, messageConnectable);
+		subscribeToSendMessage(eventBatchRouter, messageConnectable, enableMessageSendingEvent);
 
 		createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize);
 
@@ -282,8 +279,8 @@ public class MicroserviceMain {
 
     private static void subscribeToSendMessage(
             MessageRouter<EventBatch> eventBatchRouter,
-            Flowable<ConnectivityMessage> messageConnectable
-    ) {
+            Flowable<ConnectivityMessage> messageConnectable,
+            boolean enableMessageSendingEvent) {
         //noinspection ResultOfMethodCallIgnored
         messageConnectable
                 .subscribe(connectivityMessage -> {
@@ -297,6 +294,7 @@ public class MicroserviceMain {
                     }
                     boolean sent = false;
                     for (IMessage message : connectivityMessage.getSailfishMessages()) {
+                        LOGGER.debug("Start handling sent a connectivity message with metadata {}", message.getMetaData());
                         if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
                             continue;
                         }

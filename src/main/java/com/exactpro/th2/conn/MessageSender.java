@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.Map;
 
+import com.exactpro.th2.common.schema.message.DeliveryMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +35,6 @@ import com.exactpro.th2.common.event.EventUtils;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
-import com.exactpro.th2.common.schema.box.configuration.BoxConfiguration;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
 import com.exactpro.th2.conn.events.EventDispatcher;
@@ -86,14 +86,14 @@ public class MessageSender {
         }
     }
 
-    private void handle(String consumerTag, RawMessageBatch messageBatch) {
+    private void handle(DeliveryMetadata deliveryMetadata, RawMessageBatch messageBatch) {
         for (RawMessage protoMessage : messageBatch.getMessagesList()) {
             try {
                 sendMessage(protoMessage);
             } catch (InterruptedException e) {
-                logger.error("Send message operation interrupted. Consumer tag {}", consumerTag, e);
+                logger.error("Send message operation interrupted. Delivery metadata {}", deliveryMetadata, e);
             } catch (RuntimeException e) {
-                logger.error("Could not send IMessage. Consumer tag {}", consumerTag, e);
+                logger.error("Could not send IMessage. Delivery metadata {}", deliveryMetadata, e);
             }
         }
     }
