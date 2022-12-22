@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.Deque;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -411,17 +412,53 @@ public class MicroserviceMain {
                 settings.setParameterValue(settingName, castValue);
             }
 
-            for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
-                var dictionaryType = com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name());
-                try (InputStream stream = commonFactory.readDictionary(dictionaryType)) {
-                    SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
-                    settings.setDictionary(sfDictionaryType, uri);
-                }
-            }
+            loadDictionaries(serviceFactory, commonFactory, configuration, settings);
 
             return service;
         } catch (ConversionException | ServiceFactoryException e) {
             throw new RuntimeException(String.format("Could not load service '%s'", configuration.getName()), e);
+        }
+    }
+
+    private static void loadDictionaries(IServiceFactory serviceFactory, CommonFactory commonFactory, ConnectivityConfiguration configuration, ISettingsProxy settings) throws IOException, ServiceFactoryException {
+        var dictionariesToAliasMap = configuration.getDictionariesToAliasMap();
+        if (dictionariesToAliasMap != null && !dictionariesToAliasMap.isEmpty()) {
+            loadDictionariesByAliases(serviceFactory, commonFactory, settings, dictionariesToAliasMap);
+        } else {
+            loadDictionariesByTypes(serviceFactory, commonFactory, settings);
+        }
+    }
+
+    private static void loadDictionariesByTypes(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings) throws IOException, ServiceFactoryException {
+        LOGGER.debug("Loading dictionaries by types...");
+        for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
+            var dictionaryType = com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name());
+            try (InputStream stream = commonFactory.readDictionary(dictionaryType)) {
+                SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
+                settings.setDictionary(sfDictionaryType, uri);
+            }
+        }
+    }
+
+    private static void loadDictionariesByAliases(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings, Map<String, String> dictionariesToAliasMap) throws IOException, ServiceFactoryException {
+        LOGGER.debug("Loading dictionaries by aliases");
+        for (DictionaryType dictionaryTypeFromSettings : settings.getDictionaryTypes()) {
+            var typeWithAliasFromConfig = dictionariesToAliasMap.entrySet().stream()
+                    .filter(entry -> entry.getKey().compareToIgnoreCase(dictionaryTypeFromSettings.toString()) == 0)
+                    .findAny();
+
+            if (typeWithAliasFromConfig.isPresent()) {
+                String alias = typeWithAliasFromConfig.get().getValue();
+                try (InputStream inputStream = commonFactory.loadDictionary(alias)) {
+                    SailfishURI uri = serviceFactory.registerDictionary(dictionaryTypeFromSettings.name(), inputStream, true);
+                    settings.setDictionary(dictionaryTypeFromSettings, uri);
+                }
+            } else {
+                String foundedTypes = dictionariesToAliasMap.entrySet().stream().map(entry -> entry.getKey() + " with alias " + entry.getValue()).collect(Collectors.joining(", "));
+                String expectedTypes = settings.getDictionaryTypes().stream().map(Enum::toString).collect(Collectors.joining(", "));
+                LOGGER.error("Dictionary with type {} not found in the config. Expected: {}, found {}", dictionaryTypeFromSettings, expectedTypes, foundedTypes);
+                throw new IllegalArgumentException("Dictionary type " + dictionaryTypeFromSettings + " can't be loaded");
+            }
         }
     }
 
