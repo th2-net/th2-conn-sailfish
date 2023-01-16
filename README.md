@@ -119,6 +119,10 @@ spec:
 
 ## Release notes
 
+### 3.11.0
++ Update `sailfish-core` version from `3.2.1741` to `3.3.26`
++ vulnerability fixes
+
 ### 3.10.1
 
 + Update `sailfish-core` version from `3.2.1674` to `3.2.1741`
