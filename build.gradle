@@ -102,7 +102,9 @@ dependencies {
     api platform('com.exactpro.th2:bom:4.1.0')
 
     implementation 'com.exactpro.th2:common:3.44.0'
-    implementation "com.exactpro.th2:sailfish-utils:3.13.0"
+    implementation("com.exactpro.th2:sailfish-utils:3.13.0") {
+        exclude group: 'io.qameta.allure', module: 'allure-junit4'
+    }
 
     implementation "org.slf4j:slf4j-api"
 
@@ -110,7 +112,9 @@ dependencies {
 
     implementation 'io.prometheus:simpleclient'
 
-    implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}")
+    implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}") {
+        exclude group: 'io.qameta.allure', module: 'allure-junit4'
+    }
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
 }
