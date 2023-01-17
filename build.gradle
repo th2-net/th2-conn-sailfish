@@ -6,7 +6,7 @@ plugins {
 
 ext {
     sharedDir                       = file("${project.rootDir}/shared")
-    sailfishVersion                 = '3.3.26'
+    sailfishVersion                 = '3.3.49'
 }
 
 group = 'com.exactpro.th2'
@@ -102,9 +102,7 @@ dependencies {
     api platform('com.exactpro.th2:bom:4.1.0')
 
     implementation 'com.exactpro.th2:common:3.44.0'
-    implementation("com.exactpro.th2:sailfish-utils:3.13.0") {
-        exclude group: 'io.qameta.allure', module: 'allure-junit4'
-    }
+    implementation("com.exactpro.th2:sailfish-utils:3.13.0")
 
     implementation "org.slf4j:slf4j-api"
 
@@ -112,9 +110,7 @@ dependencies {
 
     implementation 'io.prometheus:simpleclient'
 
-    implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}") {
-        exclude group: 'io.qameta.allure', module: 'allure-junit4'
-    }
+    implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}")
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
 }
