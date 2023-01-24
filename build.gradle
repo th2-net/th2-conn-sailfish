@@ -2,7 +2,7 @@ plugins {
     id 'com.palantir.docker' version '0.25.0'
     id 'org.jetbrains.kotlin.jvm' version '1.6.21'
     id 'application'
-    id "org.owasp.dependencycheck" version "7.3.0"
+    id "org.owasp.dependencycheck" version "7.4.4"
 }
 
 dependencyCheck {
@@ -101,9 +101,9 @@ compileTestKotlin {
 }
 
 dependencies {
-    api platform('com.exactpro.th2:bom:4.0.2')
+    api platform('com.exactpro.th2:bom:4.1.0')
 
-    implementation 'com.exactpro.th2:common:3.41.1'
+    implementation 'com.exactpro.th2:common:3.44.0'
     implementation 'com.exactpro.th2:sailfish-utils:3.13.0'
 
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
