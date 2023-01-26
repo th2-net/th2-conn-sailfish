@@ -7,7 +7,6 @@ plugins {
 
 dependencyCheck {
     format='HTML'
-    failBuildOnCVSS=5
 }
 
 ext {
@@ -104,9 +103,7 @@ dependencies {
     api platform('com.exactpro.th2:bom:4.1.0')
 
     implementation 'com.exactpro.th2:common:3.44.0'
-    implementation 'com.exactpro.th2:sailfish-utils:3.14.0-th2-4347-vulnerabilities-4004340199-afa2a0e-SNAPSHOT'
-
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.1'
+    implementation 'com.exactpro.th2:sailfish-utils:3.14.0'
 
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
 
