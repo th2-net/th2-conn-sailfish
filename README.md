@@ -124,6 +124,7 @@ spec:
 + Updated `sailfish-core` version from `3.2.1741` to `3.3.54`
 + Updated `common` from `3.33.0` to `3.44.0`
 + Updated `kotlin` form `1.5.30` to `1.6.21`
++ Renamed project to `conn-sailfish`
 
 ### 3.10.1
 

@@ -10,7 +10,7 @@ dependencyCheck {
 }
 
 ext {
-    sharedDir                       = file("${project.rootDir}/shared")
+    sailfishVersion = '3.3.54'
 }
 
 ext.excludeSailfish = { rcd ->
@@ -24,11 +24,6 @@ group = 'com.exactpro.th2'
 version = release_version
 
 repositories {
-    maven {
-        name 'MavenLocal'
-        url sharedDir
-    }
-
     maven {
         name 'Sonatype_snapshots'
         url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
@@ -108,6 +103,8 @@ dependencies {
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
 
     implementation 'io.prometheus:simpleclient'
+
+    implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}")
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
 }
