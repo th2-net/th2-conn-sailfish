@@ -1,12 +1,23 @@
 plugins {
     id 'com.palantir.docker' version '0.25.0'
-    id 'org.jetbrains.kotlin.jvm' version '1.5.30'
+    id 'org.jetbrains.kotlin.jvm' version '1.6.21'
     id 'application'
+    id "org.owasp.dependencycheck" version "7.4.4"
+}
+
+dependencyCheck {
+    format='HTML'
 }
 
 ext {
-    sharedDir                       = file("${project.rootDir}/shared")
-    sailfishVersion                 = '3.2.1741'
+    sailfishVersion = '3.3.54'
+}
+
+ext.excludeSailfish = { rcd ->
+    rcd.excludeModule("com.exactpro.sf", "sailfish-core")
+    rcd.excludeModule("com.exactpro.sf", "sailfish-common")
+    rcd.excludeModule("com.exactpro.sf", "sailfish-rest-api-client")
+    rcd.excludeModule("com.exactpro.sf", "service-http")
 }
 
 group = 'com.exactpro.th2'
@@ -14,22 +25,42 @@ version = release_version
 
 repositories {
     maven {
-        name 'MavenLocal'
-        url sharedDir
+        name 'Sonatype_snapshots'
+        url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+        content {
+            excludeSailfish(it)
+        }
     }
-    
-    mavenCentral()
-
+    // ignoreGradleMetadataRedirection is used for sonatype because
+    // Sailfish dependencies have constrains that interfere with our BOM
+    // so we exclude Gradle metadata for this repositories.
+    // We've checked these versions - they are compatible and safe to use
     maven {
         name 'Sonatype_snapshots'
         url 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+        metadataSources {
+            mavenPom()
+            artifact()
+            ignoreGradleMetadataRedirection()
+        }
     }
-
     maven {
         name 'Sonatype_releases'
         url 'https://s01.oss.sonatype.org/content/repositories/releases/'
+        content {
+            excludeSailfish(it)
+        }
     }
-
+    maven {
+        name 'Sonatype_releases'
+        url 'https://s01.oss.sonatype.org/content/repositories/releases/'
+        metadataSources {
+            mavenPom()
+            artifact()
+            ignoreGradleMetadataRedirection()
+        }
+    }
+    mavenCentral()
     mavenLocal()
 
     configurations.all {
@@ -64,13 +95,10 @@ compileTestKotlin {
 }
 
 dependencies {
-    api platform('com.exactpro.th2:bom:3.2.0')
+    api platform('com.exactpro.th2:bom:4.1.0')
 
     implementation 'com.exactpro.th2:common:4.0.0-th2-2150-books-pages-2629057923-SNAPSHOT'
-    implementation "com.exactpro.th2:sailfish-utils:3.8.0"
-
-    implementation "org.slf4j:slf4j-log4j12"
-    implementation "org.slf4j:slf4j-api"
+    implementation "com.exactpro.th2:sailfish-utils:3.14.0"
 
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
 
