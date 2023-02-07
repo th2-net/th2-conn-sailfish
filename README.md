@@ -133,6 +133,11 @@ spec:
 + Add session group support from th2:common version 3.38.0-TH2-3578-2300290805-SNAPSHOT. 
 + Replace 2 queues with in/out pins to one queue.
 + Messages are not grouped by direction, both direction publish together.
++ Updated `sailfish-core` version from `3.2.1741` to `3.3.54`
++ Updated `common` from `3.33.0` to `3.44.0`
++ Updated `kotlin` form `1.5.30` to `1.6.21`
++ Renamed project to `conn-sailfish`
++ Trivy vulnerability check as part of build process.
 
 ### 3.10.2
 

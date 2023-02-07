@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.Map;
 
+import com.exactpro.th2.common.schema.message.DeliveryMetadata;
+import com.exactpro.th2.common.schema.message.MessageListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +46,7 @@ import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
 
 import io.reactivex.rxjava3.annotations.Nullable;
 
-public class MessageSender {
+public class MessageSender implements MessageListener<RawMessageBatch> {
     private static final String SEND_ATTRIBUTE = "send";
     private final Logger logger = LoggerFactory.getLogger(getClass().getName() + "@" + hashCode());
     private final IServiceProxy serviceProxy;
@@ -70,7 +72,7 @@ public class MessageSender {
 
         logger.info("Subscribing to queue with messages to send");
 
-        subscriberMonitor = router.subscribeAll(this::handle, SEND_ATTRIBUTE);
+        subscriberMonitor = router.subscribeAll(this, SEND_ATTRIBUTE);
     }
 
     public void stop() throws IOException {
@@ -86,17 +88,21 @@ public class MessageSender {
         }
     }
 
-    private void handle(String consumerTag, RawMessageBatch messageBatch) {
-        for (RawMessage protoMessage : messageBatch.getMessagesList()) {
+    @Override
+    public void handle(DeliveryMetadata deliveryMetadata, RawMessageBatch message) {
+        for (RawMessage protoMessage : message.getMessagesList()) {
             try {
                 sendMessage(protoMessage);
             } catch (InterruptedException e) {
-                logger.error("Send message operation interrupted. Consumer tag {}", consumerTag, e);
+                logger.error("Send message operation interrupted. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
             } catch (RuntimeException e) {
-                logger.error("Could not send IMessage. Consumer tag {}", consumerTag, e);
+                logger.error("Could not send IMessage. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
             }
         }
     }
+
+    @Override
+    public void onClose() {}
 
     private void sendMessage(RawMessage protoMsg) throws InterruptedException {
         EventID parentEventId = protoMsg.getParentEventId();
