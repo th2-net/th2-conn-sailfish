@@ -137,6 +137,7 @@ spec:
 + Updated `common` from `3.33.0` to `3.44.0`
 + Updated `kotlin` form `1.5.30` to `1.6.21`
 + Renamed project to `conn-sailfish`
++ Trivy vulnerability check as part of build process.
 
 ### 3.10.2
 
