@@ -75,7 +75,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
-import io.reactivex.rxjava3.exceptions.Exceptions;
 import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
@@ -83,6 +82,7 @@ import io.reactivex.rxjava3.subscribers.DisposableSubscriber;
 
 public class MicroserviceMain {
     private static final Logger LOGGER = LoggerFactory.getLogger(MicroserviceMain.class);
+    private static final long RETRY_DELAY_MS = 5_000L;
 
     public static final long NANOSECONDS_IN_SECOND = 1_000_000_000L;
     public static final String PASSWORD_PARAMETER = "password";
@@ -420,13 +420,22 @@ public class MicroserviceMain {
         @Override
         protected void onStart() {
             super.onStart();
-            try {
-                LOGGER.info("Subscribed to pipeline");
-                serviceProxy.start();
-                messageSender.start();
-            } catch (Exception e) {
-                LOGGER.error("Services starting failure", e);
-                Exceptions.propagate(e);
+            int retryCount = 0;
+            while (true) {
+                try {
+                    LOGGER.info("Subscribing to pipeline, attempt #{}", (retryCount + 1));
+                    serviceProxy.start();
+                    messageSender.start();
+                    break;
+                } catch (Exception e) {
+                    LOGGER.error("Services starting failure on attempt #{}", retryCount + 1, e);
+                    retryCount++;
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS);
+                    } catch (InterruptedException ex) {
+                        LOGGER.error("Retry delay interrupted", ex);
+                    }
+                }
             }
         }
 
