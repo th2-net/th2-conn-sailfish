@@ -426,6 +426,7 @@ public class MicroserviceMain {
                     LOGGER.info("Subscribing to pipeline, attempt #{}", (retryCount + 1));
                     serviceProxy.start();
                     messageSender.start();
+
                     break;
                 } catch (Exception e) {
                     LOGGER.error("Services starting failure on attempt #{}", retryCount + 1, e);
