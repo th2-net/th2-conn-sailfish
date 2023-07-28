@@ -16,6 +16,7 @@
 package com.exactpro.th2.conn;
 
 import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
+import static com.exactpro.th2.common.message.MessageUtils.toTimestamp;
 import static com.google.protobuf.TextFormat.shortDebugString;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
@@ -62,7 +63,7 @@ public class ConnectivityMessage {
         }
         messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null")),
                 requireNonNull(direction, "Direction can't be null"), sequence);
-        timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
+        timestamp = toTimestamp(sailfishMessages.get(0).getMetaData().getPreciseMsgTimestamp());
     }
 
     public String getSessionAlias() {
@@ -157,13 +158,5 @@ public class ConnectivityMessage {
         return RawMessageMetadata.newBuilder()
                 .setId(messageID)
                 .setTimestamp(timestamp);
-    }
-
-    // TODO: Required nanosecond accuracy
-    private static Timestamp createTimestamp(long milliseconds) {
-        return Timestamp.newBuilder()
-                .setSeconds(milliseconds / MILLISECONDS_IN_SECOND)
-                .setNanos((int) (milliseconds % MILLISECONDS_IN_SECOND * NANOSECONDS_IN_MILLISECOND))
-                .build();
     }
 }
