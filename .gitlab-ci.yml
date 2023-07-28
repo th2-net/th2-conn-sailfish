@@ -1,5 +1,5 @@
 variables:
-  APP_NAME: "th2-conn"
+  APP_NAME: "th2-conn-sailfish"
 
 include:
   - project: "vivarium/th2/pipelines"
