@@ -47,8 +47,6 @@ import com.google.protobuf.Timestamp;
 
 public class ConnectivityMessage {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityMessage.class);
-    public static final long MILLISECONDS_IN_SECOND = 1_000L;
-    public static final long NANOSECONDS_IN_MILLISECOND = 1_000_000L;
 
     private final List<IMessage> sailfishMessages;
 
