@@ -29,6 +29,7 @@ Parameters:
 + settings - the parameters that will be transformed to the actual service's settings specified in the **services.xml** file.
 + maxMessageBatchSize - the limitation for message batch size which connect sends to the first and to the second publish pins with. The default value is set to 100.
 + maxMessageRate - max outgoing message rate in messages per second
++ maxMessageFlushTime - defines maximum time between outgoing message batches in milliseconds. The default value is set to 1000.
 + enableMessageSendingEvent - if this option is set to `true`, connect sends a separate event for every message sent which incomes from the pin with the send attribute. The default value is set to true
 
 ## Metrics
@@ -104,6 +105,7 @@ spec:
     name: "your_service"
     maxMessageBatchSize: 100
     maxMessageRate: 100000
+    maxMessageFlushTime: 1000
     enableMessageSendingEvent: true
     settings:
       param1: "value1"
@@ -130,6 +132,7 @@ spec:
 + Updated `common` from `3.33.0` to `3.44.0`
 + Updated `kotlin` form `1.5.30` to `1.6.21`
 + Renamed project to `conn-sailfish`
++ Added `maxMessageFlushTime` option
 
 ### 3.10.2
 

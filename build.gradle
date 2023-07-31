@@ -112,7 +112,7 @@ dependencies {
 
     implementation("com.exactpro.sf:sailfish-core:${sailfishVersion}")
 
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.0'
 }
 
 test {
@@ -120,13 +120,13 @@ test {
 }
 
 application {
-    mainClassName 'com.exactpro.th2.conn.MicroserviceMain'
+    mainClass.set('com.exactpro.th2.conn.MicroserviceMain')
 }
 
 applicationName = 'service'
 
 distTar {
-    archiveName "${applicationName}.tar"
+    archiveFileName.set("${applicationName}.tar")
 }
 
 dockerPrepare {
