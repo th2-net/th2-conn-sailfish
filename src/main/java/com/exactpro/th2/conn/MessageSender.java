@@ -156,10 +156,6 @@ public class MessageSender {
         if (!propertiesMap.isEmpty()) {
             MetadataExtensions.setMessageProperties(metadata, propertiesMap);
         }
-        Timestamp timestamp = protoMsg.getMetadata().getTimestamp();
-        Instant time = Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
-        MetadataExtensions.setPreciseTimestamp(metadata, time);
-        MetadataExtensions.setTimestamp(metadata, Date.from(time));
         return metadata;
     }
 }
