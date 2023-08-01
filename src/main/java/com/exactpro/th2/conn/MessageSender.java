@@ -31,7 +31,10 @@ import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.exactpro.th2.conn.utility.EventStoreExtensions;
 import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
+import com.google.protobuf.Timestamp;
 import io.reactivex.rxjava3.annotations.Nullable;
+import java.time.Instant;
+import java.util.Date;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -153,6 +156,10 @@ public class MessageSender {
         if (!propertiesMap.isEmpty()) {
             MetadataExtensions.setMessageProperties(metadata, propertiesMap);
         }
+        Timestamp timestamp = protoMsg.getMetadata().getTimestamp();
+        Instant time = Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
+        MetadataExtensions.setPreciseTimestamp(metadata, time);
+        MetadataExtensions.setTimestamp(metadata, Date.from(time));
         return metadata;
     }
 }
