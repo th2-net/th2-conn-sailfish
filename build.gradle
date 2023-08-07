@@ -2,15 +2,21 @@ plugins {
     id 'com.palantir.docker' version '0.25.0'
     id 'org.jetbrains.kotlin.jvm' version '1.6.21'
     id 'application'
-    id "org.owasp.dependencycheck" version "7.4.4"
+    id "org.owasp.dependencycheck" version "8.2.1"
 }
 
 dependencyCheck {
-    format='HTML'
+    formats=['SARIF', 'JSON', 'HTML']
+    failBuildOnCVSS=5
+    analyzers {
+        assemblyEnabled = false
+        nugetconfEnabled = false
+        nodeEnabled = false
+    }
 }
 
 ext {
-    sailfishVersion = '3.3.54'
+    sailfishVersion = '3.3.127'
 }
 
 ext.excludeSailfish = { rcd ->
@@ -95,10 +101,10 @@ compileTestKotlin {
 }
 
 dependencies {
-    api platform('com.exactpro.th2:bom:4.1.0')
+    api platform('com.exactpro.th2:bom:4.4.0')
 
-    implementation 'com.exactpro.th2:common:3.44.0'
-    implementation 'com.exactpro.th2:sailfish-utils:3.14.0'
+    implementation 'com.exactpro.th2:common:3.44.1'
+    implementation 'com.exactpro.th2:sailfish-utils:3.15.0'
 
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
 

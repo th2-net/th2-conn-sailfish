@@ -16,6 +16,7 @@
 package com.exactpro.th2.conn;
 
 import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
+import static com.exactpro.th2.common.message.MessageUtils.toTimestamp;
 import static com.google.protobuf.TextFormat.shortDebugString;
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
@@ -46,8 +47,6 @@ import com.google.protobuf.Timestamp;
 
 public class ConnectivityMessage {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityMessage.class);
-    public static final long MILLISECONDS_IN_SECOND = 1_000L;
-    public static final long NANOSECONDS_IN_MILLISECOND = 1_000_000L;
 
     private final List<IMessage> sailfishMessages;
 
@@ -62,7 +61,7 @@ public class ConnectivityMessage {
         }
         messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null")),
                 requireNonNull(direction, "Direction can't be null"), sequence);
-        timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
+        timestamp = toTimestamp(sailfishMessages.get(0).getMetaData().getPreciseMsgTimestamp());
     }
 
     public String getSessionAlias() {
@@ -157,13 +156,5 @@ public class ConnectivityMessage {
         return RawMessageMetadata.newBuilder()
                 .setId(messageID)
                 .setTimestamp(timestamp);
-    }
-
-    // TODO: Required nanosecond accuracy
-    private static Timestamp createTimestamp(long milliseconds) {
-        return Timestamp.newBuilder()
-                .setSeconds(milliseconds / MILLISECONDS_IN_SECOND)
-                .setNanos((int) (milliseconds % MILLISECONDS_IN_SECOND * NANOSECONDS_IN_MILLISECOND))
-                .build();
     }
 }
