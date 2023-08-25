@@ -10,7 +10,7 @@ dependencyCheck {
 }
 
 ext {
-    sailfishVersion = '3.3.132'
+    sailfishVersion = '3.3.134'
 }
 
 ext.excludeSailfish = { rcd ->
