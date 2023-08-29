@@ -59,8 +59,9 @@ public class TestEvent {
     private static EventID parentId;
 
     @BeforeAll
-    public static void initMessages() throws IOException {
+    static void initMessages() throws IOException {
         serviceProxy = mock(IServiceProxy.class);
+        @SuppressWarnings("unchecked")
         MessageRouter<RawMessageBatch> router = mock(MessageRouter.class);
 
         doAnswer(invocation -> {
@@ -90,7 +91,7 @@ public class TestEvent {
     }
 
     @AfterEach
-    public void clear() {
+    void clear() {
         event = null;
         parentId = null;
     }
@@ -148,7 +149,7 @@ public class TestEvent {
     }
 
     @AfterAll
-    public static void close() throws IOException {
+    static void close() throws IOException {
         messageSender.stop();
     }
 }

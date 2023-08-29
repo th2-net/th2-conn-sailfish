@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -22,10 +22,12 @@ public class ConnectivityConfiguration {
 
     private int maxMessageBatchSize = 100;
 
+    private long maxMessageFlushTime = 1000;
+
     @JsonProperty(value = "session-alias", required = true)
     private String sessionAlias;
 
-    @JsonProperty(value = "workspace",required = true)
+    @JsonProperty(value = "workspace", required = true)
     private String workspaceFolder;
 
     @JsonProperty(required = true)
@@ -48,6 +50,10 @@ public class ConnectivityConfiguration {
 
     public int getMaxMessageBatchSize() {
         return maxMessageBatchSize;
+    }
+
+    public long getMaxMessageFlushTime() {
+        return maxMessageFlushTime;
     }
 
     public String getSessionAlias() {

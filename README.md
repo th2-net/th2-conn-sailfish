@@ -32,6 +32,7 @@ Parameters:
 + name - the service name that will be displayed in the events inside the report;
 + settings - the parameters that will be transformed to the actual service's settings specified in the **services.xml** file.
 + maxMessageBatchSize - the limitation for message batch size which connect sends to the first and to the second publish pins with. The default value is set to 100.
++ maxMessageFlushTime - defines maximum time between outgoing message batches in milliseconds. The default value is set to 1000.
 + enableMessageSendingEvent - if this option is set to `true`, connect sends a separate event for every message sent which incomes from the pin with the send attribute. The default value is set to true
 + sessionGroup - parameter will be set for all messages received or sent by this component
 + dictionaries - (optional) dictionaries will be picked up based on its aliases. Exception will be thrown in case of wrong configuration.
@@ -109,6 +110,7 @@ spec:
     name: "your_service"
     sessionGroup: "group"
     maxMessageBatchSize: 100
+    maxMessageFlushTime: 1000
     enableMessageSendingEvent: true
     settings:
       param1: "value1"
@@ -125,24 +127,24 @@ spec:
 
 ### 4.0.0
 
-+ Migration to books/pages cradle 4.0.0
++ Migration to books/pages cradle 5.0.0
 + Added ability to define dictionaries via custom config in based on sailfish adapters
++ Add session group support
++ Replace 2 queues with in/out pins to one queue.
++ Messages are not grouped by direction, both direction publish together.
+
+### 3.12.0
++ Added `maxMessageFlushTime` option
+
+### 3.11.1
++ Updated `sailfish-core` version from `3.3.54` to `3.3.132`
 
 ### 3.11.0
 
-+ Add session group support from th2:common version 3.38.0-TH2-3578-2300290805-SNAPSHOT. 
-+ Replace 2 queues with in/out pins to one queue.
-+ Messages are not grouped by direction, both direction publish together.
 + Updated `sailfish-core` version from `3.2.1741` to `3.3.54`
 + Updated `common` from `3.33.0` to `3.44.0`
 + Updated `kotlin` form `1.5.30` to `1.6.21`
 + Renamed project to `conn-sailfish`
-+ Trivy vulnerability check as part of build process.
-
-### 3.10.2
-
-+ Events are made more convenient. Added event names and error logs. Error message moved from the name to the body of the event.
-+ Use temporal directory for last layer in sailfish's workspace
 
 ### 3.10.1
 
