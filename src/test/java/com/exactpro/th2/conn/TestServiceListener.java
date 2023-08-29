@@ -43,7 +43,7 @@ public class TestServiceListener {
 
 
     @Test
-    public void onEventTest() throws JsonProcessingException {
+    public void onEventTest() throws IOException {
 
         FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
         MyEventDispatcher eventDispatcher = new MyEventDispatcher();
