@@ -1,4 +1,4 @@
-# Connect (3.11.0)
+# Connect (3.12.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -121,16 +121,18 @@ spec:
 
 ## Release notes
 
+### 3.12.0
++ Added `maxMessageFlushTime` option
+
+### 3.11.1
++ Updated `sailfish-core` version from `3.3.54` to `3.3.132`
+
 ### 3.11.0
 
-+ Added `maxMessageFlushTime` option
-+ Dependencies with vulnerabilities were updated:
-  + Sailfish updated from `3.2.1741` to `3.3.13`
-
-### 3.10.2
-
-+ Events are made more convenient. Added event names and error logs. Error message moved from the name to the body of the event.
-+ Use temporal directory for last layer in sailfish's workspace
++ Updated `sailfish-core` version from `3.2.1741` to `3.3.54`
++ Updated `common` from `3.33.0` to `3.44.0`
++ Updated `kotlin` form `1.5.30` to `1.6.21`
++ Renamed project to `conn-sailfish`
 
 ### 3.10.1
 
