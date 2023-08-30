@@ -79,10 +79,6 @@ public abstract class AbstractMessageSender {
         }
     }
 
-    private byte[] extractBody(MessageHolder holder) {
-        return new byte[0];
-    }
-
     private void storeErrorEvent(Event errorEvent, @Nullable EventID parentId) {
         try {
             if (parentId == null) {
