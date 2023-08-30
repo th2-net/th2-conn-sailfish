@@ -53,7 +53,7 @@ public class TestEvent {
 
     private static IServiceProxy serviceProxy;
     private static EventDispatcher eventDispatcher;
-    private static MessageSender messageSender;
+    private static ProtoMessageSender messageSender;
     private static MessageListener<RawMessageBatch> messageListener;
     private static Event event;
     private static EventID parentId;
@@ -85,7 +85,7 @@ public class TestEvent {
             return null;
         }).when(eventDispatcher).store(any(), any());
 
-        messageSender = new MessageSender(serviceProxy, router, eventDispatcher,
+        messageSender = new ProtoMessageSender(serviceProxy, router, eventDispatcher,
                 EventID.newBuilder().setId("stubID").build());
         messageSender.start();
     }
