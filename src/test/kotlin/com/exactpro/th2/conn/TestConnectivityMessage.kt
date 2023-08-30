@@ -25,6 +25,7 @@ import com.exactpro.th2.common.grpc.RawMessage
 import com.exactpro.th2.common.message.toJson
 import com.exactpro.th2.common.schema.box.configuration.BoxConfiguration
 import com.exactpro.th2.common.schema.factory.CommonFactory
+import com.exactpro.th2.conn.saver.impl.ProtoMessageSaver
 import com.exactpro.th2.conn.utility.parentEventID
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -61,7 +62,7 @@ class TestConnectivityMessage {
                 .setSequence(sequence)
         )
 
-        val rawMessage: RawMessage = connectivityMessage.convertToProtoRawMessage()
+        val rawMessage: RawMessage = ProtoMessageSaver.convertToProtoRawMessage(connectivityMessage)
         val rawMessageAsString = "RawMessage: " + rawMessage.toJson()
         assertArrayEquals(
             firstMessageBody + secondMessageBody + thirdMessageBody,

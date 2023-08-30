@@ -36,6 +36,8 @@ Parameters:
 + enableMessageSendingEvent - if this option is set to `true`, connect sends a separate event for every message sent which incomes from the pin with the send attribute. The default value is set to true
 + sessionGroup - parameter will be set for all messages received or sent by this component
 + dictionaries - (optional) dictionaries will be picked up based on its aliases. Exception will be thrown in case of wrong configuration.
++ useTransport - (optional) defines whether the provider should use th2 transport or protobuf protocol for storing messages.
+  By default, it has the value `false`.
 
 ## Metrics
 
@@ -69,8 +71,8 @@ You need to perform the following steps:
     revision: 0
     git_hash: 0
     branch: fake
-    version: 3.2.0.0
-    core_version: 3.2.0
+    version: 3.3.0.0
+    core_version: 3.3.0
     ```
 4. Create you own image based on the current one and put all the files in the correct places in the base image:
     + Create the following directory - **${workspace}/plugins/th2_service**.

@@ -58,7 +58,7 @@ public class TransportMessageSever implements MessageSaver {
                 .collect(Collectors.toUnmodifiableList());
     }
 
-    private static MessageGroup convertToGroup(ConnectivityMessage connectivityMessage) {
+    public static MessageGroup convertToGroup(ConnectivityMessage connectivityMessage) {
         MessageID messageId = connectivityMessage.getMessageId();
         RawMessage.Builder rawMessage = RawMessage.builder()
                 .setId(MessageUtilsKt.toTransport(messageId));
