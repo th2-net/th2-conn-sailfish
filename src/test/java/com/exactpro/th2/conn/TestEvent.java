@@ -35,6 +35,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -92,8 +93,15 @@ public class TestEvent {
 
     @AfterEach
     void clear() {
+        Mockito.reset(serviceProxy);
         event = null;
         parentId = null;
+    }
+
+    private class StacklessRuntimeException extends RuntimeException {
+        public StacklessRuntimeException() {
+            super("ignore me", null, false, false);
+        }
     }
 
     public void sendIncorrectMessage() throws Exception {
@@ -101,7 +109,7 @@ public class TestEvent {
                 .addMessages(RawMessage.newBuilder().build())
                 .build();
 
-        doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
+        doThrow(new StacklessRuntimeException()).when(serviceProxy).sendRaw(any(), any());
         messageListener.handle(new DeliveryMetadata("stubValue", false), rawMessageBatch);
     }
 
@@ -110,9 +118,11 @@ public class TestEvent {
         sendIncorrectMessage();
 
         ByteString body = event.toProto(parentId).getBody();
-        Assertions.assertEquals("[{\"data\":\"java.lang.IllegalStateException: error\",\"type\":\"message\"}," +
-                "{\"data\":\"Cannot send message. Message body in base64:\",\"type\":\"message\"},{\"data\":\"\"," +
-                "\"type\":\"message\"},{\"data\":\"java.lang.IllegalStateException: error\",\"type\":\"message\"}]", body.toStringUtf8());
+        Assertions.assertEquals("[{\"data\":\"com.exactpro.th2.conn.TestEvent$StacklessRuntimeException: ignore me\"," +
+                "\"type\":\"message\"},{\"data\":\"Cannot send message. Message body in base64:\",\"type\":\"message\"}," +
+                "{\"data\":\"\",\"type\":\"message\"}," +
+                "{\"data\":\"com.exactpro.th2.conn.TestEvent$StacklessRuntimeException: ignore me\"," +
+                "\"type\":\"message\"}]", body.toStringUtf8());
     }
 
     @Test
@@ -132,11 +142,11 @@ public class TestEvent {
 
         doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
         messageListener.handle(new DeliveryMetadata("stubValue", false), rawMessageBatch);
+        // no message was sent because of different book name in parent event
+        Mockito.verifyZeroInteractions(serviceProxy);
 
-        event.addSubEvent(Event.start());
-
-        EventBatch eventBatch = event.toBatchProto(parentId);
-        Assertions.assertEquals("RawMessageParentEventID", eventBatch.getParentEventId().getId());
+        com.exactpro.th2.common.grpc.Event eventBatch = event.toProto(parentId);
+        Assertions.assertEquals("RawMessageParentEventID", eventBatch.getParentId().getId());
     }
 
     @Test

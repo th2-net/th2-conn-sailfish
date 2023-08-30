@@ -77,7 +77,7 @@ public class ProtoMessageSender extends AbstractMessageSender implements Message
                 sendMessage(new ProtoHolder(protoMessage));
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
-            } catch (RuntimeException e) {
+            } catch (Exception e) {
                 logger.error("Could not send IMessage. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
             }
         }

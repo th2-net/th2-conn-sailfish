@@ -95,7 +95,7 @@ public class TransportMessageSender extends AbstractMessageSender implements Mes
                 }
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
-            } catch (RuntimeException e) {
+            } catch (Exception e) {
                 logger.error("Could not send IMessage. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
             }
         }
