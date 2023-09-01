@@ -37,7 +37,7 @@ Parameters:
 + sessionGroup - parameter will be set for all messages received or sent by this component
 + dictionaries - (optional) dictionaries will be picked up based on its aliases. Exception will be thrown in case of wrong configuration.
 + useTransport - (optional) defines whether the provider should use th2 transport or protobuf protocol for storing messages.
-  By default, it has the value `false`.
+  By default, it has the value `true`.
 
 ## Metrics
 
