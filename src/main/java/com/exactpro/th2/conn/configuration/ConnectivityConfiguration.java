@@ -46,7 +46,7 @@ public class ConnectivityConfiguration {
     private String sessionGroup;
 
     @JsonPropertyDescription("defines whether the th2 transport protocol should be used or protobuf protocol")
-    private boolean useTransport;
+    private boolean useTransport = true;
 
     public boolean isEnableMessageSendingEvent() {
         return enableMessageSendingEvent;
@@ -86,6 +86,10 @@ public class ConnectivityConfiguration {
 
     public Map<String, String> getDictionariesToAliasMap() {
         return dictionariesToAliasMap;
+    }
+
+    public void setUseTransport(boolean useTransport) {
+        this.useTransport = useTransport;
     }
 
     public boolean isUseTransport() {

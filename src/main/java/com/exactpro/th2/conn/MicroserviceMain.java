@@ -30,9 +30,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -200,27 +203,34 @@ public class MicroserviceMain {
 
             MessageRouter<RawMessageBatch> rawMessageRouter = factory.getMessageRouterRawBatch();
 
+            List<AbstractMessageSender> senders = new ArrayList<>(2);
+
             ProtoMessageSender protoMessageSender = new ProtoMessageSender(
                     serviceProxy,
                     rawMessageRouter,
                     eventDispatcher,
                     untrackedSentMessagesId
             );
+            senders.add(protoMessageSender);
             disposer.register(() -> {
                 LOGGER.info("Stop proto 'message send' listener");
                 protoMessageSender.stop();
             });
 
-            TransportMessageSender transportMessageSender = new TransportMessageSender(
-                    serviceProxy,
-                    factory.getTransportGroupBatchRouter(),
-                    eventDispatcher,
-                    untrackedSentMessagesId
-            );
-            disposer.register(() -> {
-                LOGGER.info("Stop transport 'message send' listener");
-                transportMessageSender.stop();
-            });
+            if (configuration.isUseTransport()) {
+                // we will listen for transport only if we are configured to
+                TransportMessageSender transportMessageSender = new TransportMessageSender(
+                        serviceProxy,
+                        factory.getTransportGroupBatchRouter(),
+                        eventDispatcher,
+                        untrackedSentMessagesId
+                );
+                senders.add(transportMessageSender);
+                disposer.register(() -> {
+                    LOGGER.info("Stop transport 'message send' listener");
+                    transportMessageSender.stop();
+                });
+            }
 
             MessageSaver messageSaver = configuration.isUseTransport()
                     ? new TransportMessageSever(factory.getTransportGroupBatchRouter())
@@ -233,7 +243,7 @@ public class MicroserviceMain {
                     messageSaver,
                     configuration.getMaxMessageBatchSize(),
                     configuration.getMaxMessageFlushTime(), configuration.isEnableMessageSendingEvent()
-            ).blockingSubscribe(new TerminationSubscriber<>(serviceProxy, protoMessageSender, transportMessageSender));
+            ).blockingSubscribe(new TerminationSubscriber<>(serviceProxy, senders));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
         } catch (IllegalArgumentException e) { LOGGER.error(e.getMessage(), e); exitCode = 4;
@@ -500,11 +510,11 @@ public class MicroserviceMain {
     private static class TerminationSubscriber<T> extends DisposableSubscriber<T> {
 
         private final IServiceProxy serviceProxy;
-        private final AbstractMessageSender[] messageSenders;
+        private final List<AbstractMessageSender> messageSenders;
 
-        public TerminationSubscriber(IServiceProxy serviceProxy, AbstractMessageSender... messageSenders) {
+        public TerminationSubscriber(IServiceProxy serviceProxy, List<AbstractMessageSender> messageSenders) {
             this.serviceProxy = serviceProxy;
-            this.messageSenders = messageSenders;
+            this.messageSenders = Objects.requireNonNull(messageSenders, "message senders list");
         }
 
         @Override
