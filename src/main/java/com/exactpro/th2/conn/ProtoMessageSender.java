@@ -77,6 +77,7 @@ public class ProtoMessageSender extends AbstractMessageSender implements Message
                 sendMessage(new ProtoHolder(protoMessage));
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
+                Thread.currentThread().interrupt();
             } catch (Exception e) {
                 logger.error("Could not send IMessage. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
             }
@@ -84,7 +85,9 @@ public class ProtoMessageSender extends AbstractMessageSender implements Message
     }
 
     @Override
-    public void onClose() {}
+    public void onClose() {
+        logger.info("Closing proto messages sender");
+    }
 
     private static class ProtoHolder implements MessageHolder {
         private final RawMessage proto;

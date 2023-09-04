@@ -95,6 +95,7 @@ public class TransportMessageSender extends AbstractMessageSender implements Mes
                 }
             } catch (InterruptedException e) {
                 logger.error("Send message operation interrupted. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
+                Thread.currentThread().interrupt();
             } catch (Exception e) {
                 logger.error("Could not send IMessage. Consumer tag {}", deliveryMetadata.getConsumerTag(), e);
             }
@@ -102,7 +103,9 @@ public class TransportMessageSender extends AbstractMessageSender implements Mes
     }
 
     @Override
-    public void onClose() {}
+    public void onClose() {
+        logger.info("Closing transport messages sender");
+    }
 
     private static class TransportHolder implements MessageHolder {
         private final RawMessage transportMsg;
