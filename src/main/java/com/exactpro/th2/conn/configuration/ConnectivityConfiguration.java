@@ -16,6 +16,7 @@ package com.exactpro.th2.conn.configuration;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 public class ConnectivityConfiguration {
     private boolean enableMessageSendingEvent = true;
@@ -43,6 +44,9 @@ public class ConnectivityConfiguration {
     private Map<String, String> dictionariesToAliasMap;
 
     private String sessionGroup;
+
+    @JsonPropertyDescription("defines whether the th2 transport protocol should be used or protobuf protocol")
+    private boolean useTransport = true;
 
     public boolean isEnableMessageSendingEvent() {
         return enableMessageSendingEvent;
@@ -82,5 +86,13 @@ public class ConnectivityConfiguration {
 
     public Map<String, String> getDictionariesToAliasMap() {
         return dictionariesToAliasMap;
+    }
+
+    public void setUseTransport(boolean useTransport) {
+        this.useTransport = useTransport;
+    }
+
+    public boolean isUseTransport() {
+        return useTransport;
     }
 }

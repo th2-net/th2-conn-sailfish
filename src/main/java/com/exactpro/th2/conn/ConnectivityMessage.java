@@ -16,17 +16,9 @@
 package com.exactpro.th2.conn;
 
 import com.exactpro.sf.common.messages.IMessage;
-import com.exactpro.sf.common.messages.IMetadata;
 import com.exactpro.sf.common.messages.MetadataExtensions;
 import com.exactpro.th2.common.grpc.Direction;
-import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageID;
-import com.exactpro.th2.common.grpc.RawMessage;
-import com.exactpro.th2.common.grpc.RawMessageMetadata;
-import com.exactpro.th2.common.grpc.RawMessageMetadata.Builder;
-import com.exactpro.th2.conn.utility.MetadataProperty;
-import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.slf4j.Logger;
@@ -38,19 +30,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
 import static com.google.protobuf.TextFormat.shortDebugString;
 import static java.util.Objects.requireNonNull;
-import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 @SuppressWarnings("ClassNamePrefixedWithPackageName")
 public class ConnectivityMessage {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityMessage.class);
-    public static final long MILLISECONDS_IN_SECOND = 1_000L;
-    public static final long NANOSECONDS_IN_MILLISECOND = 1_000_000L;
 
     private final List<IMessage> sailfishMessages;
     private final MessageID messageId;
+
+    private int totalBodySize = -1;
 
     public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID.Builder messageIdBuilder) {
         requireNonNull(sailfishMessages, "Messages can't be null");
@@ -68,40 +58,15 @@ public class ConnectivityMessage {
                 .build();
     }
 
-    public RawMessage convertToProtoRawMessage() {
-        int totalSize = calculateTotalBodySize(sailfishMessages);
-        if (totalSize == 0) {
-            throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
-        }
-
-        RawMessage.Builder messageBuilder = RawMessage.newBuilder();
-        Builder metadataBuilder = RawMessageMetadata.newBuilder().setId(messageId);
-        byte[] bodyData = new byte[totalSize];
-        int index = 0;
-        for (IMessage message : sailfishMessages) {
-            IMetadata sfMetadata = message.getMetaData();
-            if (SailfishMetadataExtensions.contains(sfMetadata, MetadataProperty.PARENT_EVENT_ID)) {
-                EventID parentEventID = SailfishMetadataExtensions.getParentEventID(sfMetadata);
-                // Should never happen because the Sailfish does not support sending multiple messages at once
-                if (messageBuilder.hasParentEventId()) {
-                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageId, messageBuilder.getParentEventId(), parentEventID);
-                }
-                messageBuilder.setParentEventId(parentEventID);
+    public int calculateTotalBodySize() {
+        if (totalBodySize == -1) {
+            int totalSize = calculateTotalBodySize(sailfishMessages);
+            if (totalSize == 0) {
+                throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
             }
-            metadataBuilder.putAllProperties(defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap()));
-
-            byte[] rawMessage = MetadataExtensions.getRawMessage(sfMetadata);
-            if (rawMessage == null) {
-                LOGGER.warn("The message has empty raw data {}: {}", message.getName(), message);
-                continue;
-            }
-            System.arraycopy(rawMessage, 0, bodyData, index, rawMessage.length);
-            index += rawMessage.length;
+            totalBodySize = totalSize;
         }
-
-        return messageBuilder.setMetadata(metadataBuilder)
-                .setBody(ByteString.copyFrom(bodyData))
-                .build();
+        return totalBodySize;
     }
 
     public MessageID getMessageId() {
@@ -114,6 +79,11 @@ public class ConnectivityMessage {
 
     public String getSessionAlias() {
         return messageId.getConnectionId().getSessionAlias();
+    }
+
+    public String getGroup() {
+        String group = messageId.getConnectionId().getSessionGroup();
+        return group.isEmpty() ? getSessionAlias() : group;
     }
 
     public Direction getDirection() {

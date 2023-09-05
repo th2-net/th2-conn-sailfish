@@ -30,10 +30,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,6 +43,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.exactpro.th2.conn.saver.MessageSaver;
+import com.exactpro.th2.conn.saver.impl.ProtoMessageSaver;
+import com.exactpro.th2.conn.saver.impl.TransportMessageSever;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -198,25 +203,47 @@ public class MicroserviceMain {
 
             MessageRouter<RawMessageBatch> rawMessageRouter = factory.getMessageRouterRawBatch();
 
-                MessageSender messageSender = new MessageSender(
+            List<AbstractMessageSender> senders = new ArrayList<>(2);
+
+            ProtoMessageSender protoMessageSender = new ProtoMessageSender(
                     serviceProxy,
                     rawMessageRouter,
                     eventDispatcher,
                     untrackedSentMessagesId
             );
+            senders.add(protoMessageSender);
             disposer.register(() -> {
-                LOGGER.info("Stop 'message send' listener");
-                messageSender.stop();
+                LOGGER.info("Stop proto 'message send' listener");
+                protoMessageSender.stop();
             });
+
+            if (configuration.isUseTransport()) {
+                // we will listen for transport only if we are configured to
+                TransportMessageSender transportMessageSender = new TransportMessageSender(
+                        serviceProxy,
+                        factory.getTransportGroupBatchRouter(),
+                        eventDispatcher,
+                        untrackedSentMessagesId
+                );
+                senders.add(transportMessageSender);
+                disposer.register(() -> {
+                    LOGGER.info("Stop transport 'message send' listener");
+                    transportMessageSender.stop();
+                });
+            }
+
+            MessageSaver messageSaver = configuration.isUseTransport()
+                    ? new TransportMessageSever(factory.getTransportGroupBatchRouter())
+                    : new ProtoMessageSaver(factory.getMessageRouterMessageGroupBatch());
 
             createPipeline(
                     processor,
                     processor::onComplete,
                     eventBatchRouter,
-                    rawMessageRouter,
+                    messageSaver,
                     configuration.getMaxMessageBatchSize(),
-                   configuration.getMaxMessageFlushTime(), configuration.isEnableMessageSendingEvent()
-            ).blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
+                    configuration.getMaxMessageFlushTime(), configuration.isEnableMessageSendingEvent()
+            ).blockingSubscribe(new TerminationSubscriber<>(serviceProxy, senders));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
         } catch (IllegalArgumentException e) { LOGGER.error(e.getMessage(), e); exitCode = 4;
@@ -245,9 +272,10 @@ public class MicroserviceMain {
             Flowable<ConnectivityMessage> flowable,
             Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
-            MessageRouter<RawMessageBatch> rawMessageRouter,
+            MessageSaver messageSaver,
             int maxMessageBatchSize,
-           long maxMessageFlushTime, boolean enableMessageSendingEvent
+            long maxMessageFlushTime,
+            boolean enableMessageSendingEvent
     ) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
@@ -270,9 +298,11 @@ public class MicroserviceMain {
 				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
 				.publish();
 
-		subscribeToSendMessage(eventBatchRouter, messageConnectable);
+        if (enableMessageSendingEvent) {
+            subscribeToSendMessage(eventBatchRouter, messageConnectable);
+        }
 
-		createPackAndPublishPipeline(messageConnectable, rawMessageRouter, maxMessageBatchSize, maxMessageFlushTime);
+		createPackAndPublishPipeline(messageConnectable, messageSaver, maxMessageBatchSize, maxMessageFlushTime);
 
         messageConnectable.connect();
 
@@ -316,7 +346,7 @@ public class MicroserviceMain {
     }
 
     private static void createPackAndPublishPipeline(Flowable<ConnectivityMessage> messageConnectable,
-            MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize, long maxMessageFlushTime) {
+            MessageSaver messageSaver, int maxMessageBatchSize, long maxMessageFlushTime) {
 
         messageConnectable
                 .doOnNext(message -> LOGGER.trace(
@@ -337,8 +367,7 @@ public class MicroserviceMain {
                 })
                 .subscribe(batch -> {
                     try {
-                        RawMessageBatch rawBatch = batch.convertToProtoRawBatch();
-                        rawMessageRouter.send(rawBatch); //FIXME: Only one pin can be used
+                        messageSaver.save(batch);
                     } catch (Exception e) {
                         if (LOGGER.isErrorEnabled()) {
                             LOGGER.error("Cannot send batch with sequences: {}",
@@ -478,14 +507,14 @@ public class MicroserviceMain {
     }
 
     @SuppressWarnings("ParameterNameDiffersFromOverriddenParameter")
-    private static class TermibnationSubscriber<T> extends DisposableSubscriber<T> {
+    private static class TerminationSubscriber<T> extends DisposableSubscriber<T> {
 
         private final IServiceProxy serviceProxy;
-        private final MessageSender messageSender;
+        private final List<AbstractMessageSender> messageSenders;
 
-        public TermibnationSubscriber(IServiceProxy serviceProxy, MessageSender messageSender) {
+        public TerminationSubscriber(IServiceProxy serviceProxy, List<AbstractMessageSender> messageSenders) {
             this.serviceProxy = serviceProxy;
-            this.messageSender = messageSender;
+            this.messageSenders = Objects.requireNonNull(messageSenders, "message senders list");
         }
 
         @Override
@@ -495,7 +524,9 @@ public class MicroserviceMain {
                 LOGGER.info("Subscribed to pipeline");
                 serviceProxy.start();
                 LOGGER.info("Service started. Starting message sender");
-                messageSender.start();
+                for (AbstractMessageSender messageSender : messageSenders) {
+                    messageSender.start();
+                }
                 LOGGER.info("Subscription finished");
             } catch (Exception e) {
                 LOGGER.error("Services starting failure", e);

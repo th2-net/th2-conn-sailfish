@@ -15,7 +15,10 @@
  */
 package com.exactpro.th2.conn;
 
+import com.exactpro.th2.common.grpc.AnyMessage;
 import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.MessageGroup;
+import com.exactpro.th2.common.grpc.MessageGroupBatch;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +36,7 @@ public class ConnectivityBatch {
 
     private final String bookName;
     private final String sessionAlias;
+    private final String group;
     private final long sequence;
     private final List<ConnectivityMessage> connectivityMessages;
 
@@ -44,18 +48,11 @@ public class ConnectivityBatch {
         ConnectivityMessage firstMessage = connectivityMessages.get(0);
         this.bookName = firstMessage.getBookName();
         this.sessionAlias = firstMessage.getSessionAlias();
+        this.group = firstMessage.getGroup();
         checkMessages(connectivityMessages, bookName, sessionAlias);
 
         this.sequence = firstMessage.getSequence();
         this.connectivityMessages = List.copyOf(connectivityMessages);
-    }
-
-    public RawMessageBatch convertToProtoRawBatch() {
-        return RawMessageBatch.newBuilder()
-                .addAllMessages(connectivityMessages.stream()
-                        .map(ConnectivityMessage::convertToProtoRawMessage)
-                        .collect(Collectors.toList()))
-                .build();
     }
 
     public String getBookName() {
@@ -64,6 +61,10 @@ public class ConnectivityBatch {
 
     public String getSessionAlias() {
         return sessionAlias;
+    }
+
+    public String getGroup() {
+        return group;
     }
 
     public long getSequence() {
