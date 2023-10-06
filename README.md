@@ -124,13 +124,13 @@ spec:
 ### 3.11.2
 
 + Sailfish updated from `3.3.132` to `3.3.144`
++ Added `maxMessageFlushTime` option
++ Use temporal directory for last layer in sailfish's workspace
 
 ### 3.11.1
 + Updated `sailfish-core` version from `3.3.54` to `3.3.132`
 
 ### 3.11.0
-
-+ Added `maxMessageFlushTime` option
 
 + Updated `sailfish-core` version from `3.2.1741` to `3.3.54`
 + Updated `common` from `3.33.0` to `3.44.0`
@@ -140,7 +140,6 @@ spec:
 ### 3.10.2
 
 + Events are made more convenient. Added event names and error logs. Error message moved from the name to the body of the event.
-+ Use temporal directory for last layer in sailfish's workspace
 
 ### 3.10.1
 
