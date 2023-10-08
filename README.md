@@ -1,4 +1,4 @@
-# Connect (4.0.0)
+# Connect (4.0.1)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -126,6 +126,11 @@ spec:
 ```
 
 ## Release notes
+
+### 4.0.1
+
++ fixed bug: proto subscriber used th2 transport pin
++ fixed "IllegalStateException: Property "eventId" has not been set"
 
 ### 4.0.0
 
