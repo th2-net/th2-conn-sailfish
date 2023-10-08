@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.exactpro.th2.conn;
 
 import com.exactpro.sf.externalapi.IServiceProxy;
@@ -21,7 +22,6 @@ import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.schema.message.DeliveryMetadata;
 import com.exactpro.th2.common.schema.message.MessageListener;
 import com.exactpro.th2.common.schema.message.MessageRouter;
-import com.exactpro.th2.common.schema.message.QueueAttribute;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.EventId;
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.GroupBatch;
@@ -60,7 +60,7 @@ public class TransportMessageSender extends AbstractMessageSender implements Mes
 
         logger.info("Subscribing to transport queue with messages to send");
 
-        subscriberMonitor = router.subscribeAll(this, SEND_ATTRIBUTE, QueueAttribute.RAW.getValue());
+        subscriberMonitor = router.subscribeAll(this, SEND_ATTRIBUTE);
     }
 
     public void stop() throws IOException {
@@ -146,5 +146,4 @@ public class TransportMessageSender extends AbstractMessageSender implements Mes
             }
         }
     }
-
 }

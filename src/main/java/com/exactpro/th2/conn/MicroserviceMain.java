@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2023 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.exactpro.th2.conn;
 
 import static com.exactpro.th2.conn.utility.EventStoreExtensions.storeEvent;
@@ -205,20 +206,7 @@ public class MicroserviceMain {
 
             List<AbstractMessageSender> senders = new ArrayList<>(2);
 
-            ProtoMessageSender protoMessageSender = new ProtoMessageSender(
-                    serviceProxy,
-                    rawMessageRouter,
-                    eventDispatcher,
-                    untrackedSentMessagesId
-            );
-            senders.add(protoMessageSender);
-            disposer.register(() -> {
-                LOGGER.info("Stop proto 'message send' listener");
-                protoMessageSender.stop();
-            });
-
             if (configuration.isUseTransport()) {
-                // we will listen for transport only if we are configured to
                 TransportMessageSender transportMessageSender = new TransportMessageSender(
                         serviceProxy,
                         factory.getTransportGroupBatchRouter(),
@@ -229,6 +217,18 @@ public class MicroserviceMain {
                 disposer.register(() -> {
                     LOGGER.info("Stop transport 'message send' listener");
                     transportMessageSender.stop();
+                });
+            } else {
+                ProtoMessageSender protoMessageSender = new ProtoMessageSender(
+                        serviceProxy,
+                        rawMessageRouter,
+                        eventDispatcher,
+                        untrackedSentMessagesId
+                );
+                senders.add(protoMessageSender);
+                disposer.register(() -> {
+                    LOGGER.info("Stop proto 'message send' listener");
+                    protoMessageSender.stop();
                 });
             }
 
@@ -280,13 +280,11 @@ public class MicroserviceMain {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
 		ConnectableFlowable<ConnectivityMessage> messageConnectable = flowable
-				.doOnNext(message -> {
-					LOGGER.trace(
-							"Message before observeOn with sequence {} and direction {}",
-							message.getSequence(),
-							message.getDirection()
-					);
-				})
+				.doOnNext(message -> LOGGER.trace(
+                        "Message before observeOn with sequence {} and direction {}",
+                        message.getSequence(),
+                        message.getDirection()
+                ))
 				.observeOn(PIPELINE_SCHEDULER)
 				.doOnNext(connectivityMessage -> {
 					LOGGER.debug("Start handling connectivity message {}", connectivityMessage);
