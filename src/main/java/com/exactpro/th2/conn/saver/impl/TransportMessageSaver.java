@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.exactpro.th2.conn.saver.impl;
 
 import com.exactpro.sf.common.messages.IMessage;
@@ -21,6 +22,7 @@ import com.exactpro.sf.common.messages.MetadataExtensions;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.common.schema.message.MessageRouter;
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.EventId;
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.GroupBatch;
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.MessageGroup;
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.RawMessage;
@@ -46,11 +48,11 @@ import java.util.stream.Collectors;
 import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
-public class TransportMessageSever implements MessageSaver {
-    private static final Logger LOGGER = LoggerFactory.getLogger(TransportMessageSever.class);
+public class TransportMessageSaver implements MessageSaver {
+    private static final Logger LOGGER = LoggerFactory.getLogger(TransportMessageSaver.class);
     private final MessageRouter<GroupBatch> router;
 
-    public TransportMessageSever(MessageRouter<GroupBatch> router) {
+    public TransportMessageSaver(MessageRouter<GroupBatch> router) {
         this.router = Objects.requireNonNull(router, "router cannot be null");
     }
 
@@ -69,7 +71,7 @@ public class TransportMessageSever implements MessageSaver {
 
     private static List<MessageGroup> convertToGroups(List<ConnectivityMessage> messages) {
         return messages.stream()
-                .map(TransportMessageSever::convertToGroup)
+                .map(TransportMessageSaver::convertToGroup)
                 .collect(Collectors.toUnmodifiableList());
     }
 
@@ -78,16 +80,19 @@ public class TransportMessageSever implements MessageSaver {
         RawMessage.Builder rawMessage = RawMessage.builder()
                 .setId(MessageUtilsKt.toTransport(messageId));
         ByteBuf body = Unpooled.buffer(connectivityMessage.calculateTotalBodySize());
+
+        EventId prevEventId = null;
         for (IMessage message : connectivityMessage.getSailfishMessages()) {
             IMetadata sfMetadata = message.getMetaData();
             if (SailfishMetadataExtensions.contains(sfMetadata, MetadataProperty.PARENT_EVENT_ID)) {
                 EventID parentEventID = SailfishMetadataExtensions.getParentEventID(sfMetadata);
                 // Should never happen because the Sailfish does not support sending multiple messages at once
-                if (rawMessage.getEventId() != null) {
+                if (prevEventId != null) {
                     LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}",
                             messageId, rawMessage.getEventId(), parentEventID);
                 }
-                rawMessage.setEventId(EventUtilsKt.toTransport(parentEventID));
+                prevEventId = EventUtilsKt.toTransport(parentEventID);
+                rawMessage.setEventId(prevEventId);
             }
             Map<String, String> props = defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap());
             if (!props.isEmpty()) {

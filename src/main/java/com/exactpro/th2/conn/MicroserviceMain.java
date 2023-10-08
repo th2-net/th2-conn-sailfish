@@ -46,7 +46,7 @@ import java.util.stream.Stream;
 
 import com.exactpro.th2.conn.saver.MessageSaver;
 import com.exactpro.th2.conn.saver.impl.ProtoMessageSaver;
-import com.exactpro.th2.conn.saver.impl.TransportMessageSever;
+import com.exactpro.th2.conn.saver.impl.TransportMessageSaver;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -233,7 +233,7 @@ public class MicroserviceMain {
             }
 
             MessageSaver messageSaver = configuration.isUseTransport()
-                    ? new TransportMessageSever(factory.getTransportGroupBatchRouter())
+                    ? new TransportMessageSaver(factory.getTransportGroupBatchRouter())
                     : new ProtoMessageSaver(factory.getMessageRouterMessageGroupBatch());
 
             createPipeline(
