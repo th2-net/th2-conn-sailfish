@@ -1,4 +1,4 @@
-# Connect (4.0.0)
+# Connect (4.0.1)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -126,6 +126,12 @@ spec:
 ```
 
 ## Release notes
+
+### 4.0.1
+
+#### Fixed:
+
++ Exception when processing sent message with event ID
 
 ### 4.0.0
 
