@@ -83,10 +83,12 @@ public class TransportMessageSever implements MessageSaver {
             if (SailfishMetadataExtensions.contains(sfMetadata, MetadataProperty.PARENT_EVENT_ID)) {
                 EventID parentEventID = SailfishMetadataExtensions.getParentEventID(sfMetadata);
                 // Should never happen because the Sailfish does not support sending multiple messages at once
-                if (rawMessage.getEventId() != null) {
-                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}",
-                            messageId, rawMessage.getEventId(), parentEventID);
-                }
+                // This check is removed because raw message builder throws an IllegalStateException
+                // if the event ID is not set
+//                if (rawMessage.getEventId() != null) {
+//                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}",
+//                            messageId, rawMessage.getEventId(), parentEventID);
+//                }
                 rawMessage.setEventId(EventUtilsKt.toTransport(parentEventID));
             }
             Map<String, String> props = defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap());
