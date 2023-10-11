@@ -60,7 +60,7 @@ public class TransportMessageSender extends AbstractMessageSender implements Mes
 
         logger.info("Subscribing to transport queue with messages to send");
 
-        subscriberMonitor = router.subscribeAll(this, SEND_ATTRIBUTE, QueueAttribute.RAW.getValue());
+        subscriberMonitor = router.subscribeAll(this, SEND_ATTRIBUTE);
     }
 
     public void stop() throws IOException {
