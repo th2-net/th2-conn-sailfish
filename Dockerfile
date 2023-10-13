@@ -1,4 +1,4 @@
-FROM gradle:6.6-jdk11 AS build
+FROM gradle:7.6-jdk11 AS build
 ARG release_version
 COPY ./ .
 RUN gradle --no-daemon clean build dockerPrepare -Prelease_version=${release_version}
