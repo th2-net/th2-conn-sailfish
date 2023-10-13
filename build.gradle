@@ -98,7 +98,7 @@ dependencies {
     api platform('com.exactpro.th2:bom:4.1.0')
 
     implementation 'com.exactpro.th2:common:3.44.0'
-    implementation 'com.exactpro.th2:sailfish-utils:3.14.0'
+    implementation 'com.exactpro.th2:sailfish-utils:3.15.0'
 
     implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
 
