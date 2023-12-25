@@ -1,4 +1,4 @@
-# Connect (4.0.1)
+# Connect (4.0.2)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -126,6 +126,10 @@ spec:
 ```
 
 ## Release notes
+
+### 4.0.2
++ Fixed conn write sailfish service logs into last sailfish workspace layer problem
++ Updated `sailfish-core` version from `3.3.132` to `3.3.169`
 
 ### 4.0.1
 

@@ -133,8 +133,10 @@ public class MicroserviceMain {
                 processor.onComplete();
             });
 
-            IServiceFactory serviceFactory = new ServiceFactory(workspaceFolder,
-                    Files.createTempDirectory("sailfish-workspace").toFile());
+            IServiceFactory serviceFactory = ServiceFactory
+                    .builder(workspaceFolder, Files.createTempDirectory("sailfish-workspace").toFile())
+                    .useServiceAppenders(false)
+                    .build();
             disposer.register(() -> {
                 LOGGER.info("Close service factory");
                 serviceFactory.close();
@@ -280,13 +282,11 @@ public class MicroserviceMain {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
 		ConnectableFlowable<ConnectivityMessage> messageConnectable = flowable
-				.doOnNext(message -> {
-					LOGGER.trace(
-							"Message before observeOn with sequence {} and direction {}",
-							message.getSequence(),
-							message.getDirection()
-					);
-				})
+				.doOnNext(message -> LOGGER.trace(
+                        "Message before observeOn with sequence {} and direction {}",
+                        message.getSequence(),
+                        message.getDirection()
+                ))
 				.observeOn(PIPELINE_SCHEDULER)
 				.doOnNext(connectivityMessage -> {
 					LOGGER.debug("Start handling connectivity message {}", connectivityMessage);
