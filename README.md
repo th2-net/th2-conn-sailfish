@@ -1,4 +1,4 @@
-# Connect (4.0.1)
+# Connect (4.1.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -126,6 +126,18 @@ spec:
 ```
 
 ## Release notes
+
+### 4.1.0
+
++ Migrate to th2 gradle plugin `0.1.1`
+
+#### Updated
++ sailfish-core: `3.3.241`
++ bom: `4.6.1`
++ common: `5.14.0-dev`
++ common-utils: `2.2.3-dev`
++ sailfish: `4.1.1-dev`
++ rxjava: `3.1.8`
 
 ### 4.0.1
 
