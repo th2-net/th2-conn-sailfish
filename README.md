@@ -156,6 +156,12 @@ spec:
 ### 3.12.0
 + Added `maxMessageFlushTime` option
 
+### 3.11.2
+
++ Sailfish updated from `3.3.132` to `3.3.144`
++ Added `maxMessageFlushTime` option
++ Use temporal directory for last layer in sailfish's workspace
+
 ### 3.11.1
 + Updated `sailfish-core` version from `3.3.54` to `3.3.132`
 
@@ -166,9 +172,13 @@ spec:
 + Updated `kotlin` form `1.5.30` to `1.6.21`
 + Renamed project to `conn-sailfish`
 
+### 3.10.2
+
++ Events are made more convenient. Added event names and error logs. Error message moved from the name to the body of the event.
+
 ### 3.10.1
 
-+ Update `sailfish-core` version from `3.2.1674` to `3.2.1741`
++ Updated `sailfish-core` version from `3.2.1674` to `3.2.1741`
   + Add exception for checking the property in `IMetadata`
 + Added synchronization by processor to `ServiceListener.onMessage()` otherwise processor sometimes misses some sequences
 + Added log about missed sequences
@@ -176,15 +186,15 @@ spec:
 
 ### 3.10.0
 
-+ Update `th2-common` version from `3.25.1` to `3.33.0`
-+ Update `org.jetbrains.kotlin.jvm` version from `1.3.72` to `1.5.30`
++ Updated `th2-common` version from `3.25.1` to `3.33.0`
++ Updated `org.jetbrains.kotlin.jvm` version from `1.3.72` to `1.5.30`
 
 ### 3.9.0
 
-+ Update `sailfish-core` version from `3.2.1650` to `3.2.1674`
++ Updated `sailfish-core` version from `3.2.1650` to `3.2.1674`
   + Embedded Sailfish service based on MINA decodes the message as sender during sending. This approach is important for protocols in which a pair of messages have the same protocol message type and different structures depending on the direction. 
-+ Update `th2-common` version from `3.16.5` to `3.25.1`
-+ Update `th2-sailfish-utils` version from `3.4.0` to `3.8.0`
++ Updated `th2-common` version from `3.16.5` to `3.25.1`
++ Updated `th2-sailfish-utils` version from `3.4.0` to `3.8.0`
     
 ### 3.8.1
 
@@ -196,11 +206,11 @@ spec:
 
 ### 3.7.2
 
-+ Update Sailfish version to 3.2.1603
++ Updated Sailfish version to 3.2.1603
 
 ### 3.7.1
 
-+ Update Sailfish version to 3.2.1572 (unwraps the EvolutionBatch when sending raw message)
++ Updated Sailfish version to 3.2.1572 (unwraps the EvolutionBatch when sending raw message)
 
 ### 3.7.0
 
@@ -228,7 +238,7 @@ spec:
 + reads dictionaries from the /var/th2/config/dictionary folder.
 + uses mq_router, grpc_router, cradle_manager optional JSON configs from the /var/th2/config folder
 + tries to load log4j.properties files from sources in order: '/var/th2/config', '/home/etc', configured path via cmd, default configuration
-+ update Cradle version. Introduce async API for storing events
++ updated Cradle version. Introduce async API for storing events
 
 ### 3.4.1
 
