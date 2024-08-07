@@ -1,4 +1,4 @@
-# Connect (3.11.2)
+# Connect (4.1.0)
 
 The "Connect" component is responsible for the communication with a target system.
 This component implements the logic of the interaction protocol, receiving and sending messages from and to the system, respectively.
@@ -17,6 +17,10 @@ session-alias: "connectivity-alias"
 workspace: "/home/sailfish/workspace"
 type: "th2_service:Your_Service_Type"
 name: "your_service"
+sessionGroup: "group"
+dictionaries:
+  MAIN: aliasA
+  LEVEL1: aliasB
 settings:
   param1: "value1"
 ```
@@ -30,6 +34,10 @@ Parameters:
 + maxMessageBatchSize - the limitation for message batch size which connect sends to the first and to the second publish pins with. The default value is set to 100.
 + maxMessageFlushTime - defines maximum time between outgoing message batches in milliseconds. The default value is set to 1000.
 + enableMessageSendingEvent - if this option is set to `true`, connect sends a separate event for every message sent which incomes from the pin with the send attribute. The default value is set to true
++ sessionGroup - parameter will be set for all messages received or sent by this component
++ dictionaries - (optional) dictionaries will be picked up based on its aliases. Exception will be thrown in case of wrong configuration.
++ useTransport - (optional) defines whether the provider should use th2 transport or protobuf protocol for storing messages.
+  By default, it has the value `true`.
 
 ## Metrics
 
@@ -63,8 +71,8 @@ You need to perform the following steps:
     revision: 0
     git_hash: 0
     branch: fake
-    version: 3.2.0.0
-    core_version: 3.2.0
+    version: 3.3.0.0
+    core_version: 3.3.0
     ```
 4. Create you own image based on the current one and put all the files in the correct places in the base image:
     + Create the following directory - **${workspace}/plugins/th2_service**.
@@ -77,13 +85,13 @@ You need to perform the following steps:
 
 ## Pins
 
-Connect has 2 types of pins for interacting with th2 components.
-Messages that were received from / sent to the target system will be sent to the following queues:
+Connect has only 1 type of pins for interacting with th2 components.
+Messages that were received from / sent to the target system will be sent to the following queue:
 
-- incoming raw messages
-- outgoing raw messages
+- sended raw messages
 
-The "Connect" component uses a separate queue to send messages. The component subscribes to that pin at the start and waits for the messages.
+
+The "Connect" component uses a queue to send messages. The component subscribes to that pin at the start and waits for the messages.
 The messages received from that pin will be sent to the target system.
 Also, this component is responsible for maintaining connections and sessions in the cases where this is provided by the communication protocol.
 Here you can automatically send heartbeat messages, send a logon/logout, requests to retransmit messages in the event of a gap, etc.
@@ -102,24 +110,51 @@ spec:
     workspace: "/home/sailfish/workspace"
     type: "th2_service:Your_Service_Type"
     name: "your_service"
+    sessionGroup: "group"
     maxMessageBatchSize: 100
     maxMessageFlushTime: 1000
     enableMessageSendingEvent: true
     settings:
       param1: "value1"
   pins:
-    - name: in_raw
+    - name: send_raw
       connection-type: mq
-      attributes: ["first", "raw", "publish", "store"]
-    - name: out_raw
-      connection-type: mq
-      attributes: ["second", "raw", "publish", "store"]
+      attributes: ["raw", "publish", "store"]
     - name: to_send
       connection-type: mq
       attributes: ["send", "raw", "subscribe"]
 ```
 
 ## Release notes
+
+### 4.1.0
+
++ Migrate to th2 gradle plugin `0.1.1`
+
+#### Updated
++ sailfish-core: `3.3.241`
++ bom: `4.6.1`
++ common: `5.14.0-dev`
++ common-utils: `2.2.3-dev`
++ sailfish: `4.1.1-dev`
++ rxjava: `3.1.8`
+
+### 4.0.1
+
+#### Fixed:
+
++ Exception when processing sent message with event ID
+
+### 4.0.0
+
++ Migration to books/pages cradle 5.0.0
++ Added ability to define dictionaries via custom config in based on sailfish adapters
++ Add session group support
++ Replace 2 queues with in/out pins to one queue.
++ Messages are not grouped by direction, both direction publish together.
+
+### 3.12.0
++ Added `maxMessageFlushTime` option
 
 ### 3.11.2
 

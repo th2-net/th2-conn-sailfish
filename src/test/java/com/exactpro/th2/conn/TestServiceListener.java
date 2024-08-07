@@ -20,7 +20,10 @@ import com.exactpro.sf.externalapi.IServiceProxy;
 import com.exactpro.sf.services.ServiceEvent;
 import com.exactpro.sf.services.ServiceEventFactory;
 import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.EventID;
+import com.exactpro.th2.common.grpc.MessageID;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventHolder;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,6 +33,7 @@ import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -39,13 +43,20 @@ public class TestServiceListener {
 
 
     @Test
-    public void onEventTest() throws JsonProcessingException {
+    public void onEventTest() throws IOException {
 
         FlowableProcessor<ConnectivityMessage> processor = UnicastProcessor.create();
         MyEventDispatcher eventDispatcher = new MyEventDispatcher();
 
-        ServiceListener serviceListener = new ServiceListener(Map.of(Direction.FIRST, new AtomicLong(1)),
-                "SessionAlias", processor, eventDispatcher);
+        ServiceListener serviceListener = new ServiceListener(
+                Map.of(Direction.FIRST, new AtomicLong(1)),
+                () -> MessageID.newBuilder()
+                        .setBookName("book")
+                        .setConnectionId(ConnectionID.newBuilder()
+                                .setSessionAlias("SessionAlias")
+                        ),
+                processor,
+                eventDispatcher);
 
         ServiceEvent serviceEvent = ServiceEventFactory.createEventInfo(ServiceName.parse("serviceName"), ServiceEvent.Type.INFO,
                 "Warn: incoming message with missing field: 45", null);
@@ -54,7 +65,7 @@ public class TestServiceListener {
         serviceListener.onEvent(serviceProxy, serviceEvent);
 
         Event event = eventDispatcher.getEvent();
-        var grpcEvent = event.toProto(null);
+        var grpcEvent = event.toProto("book");
 
         String name = grpcEvent.getName();
         Assertions.assertEquals("Service [serviceName] emitted event with status INFO", name);
@@ -74,7 +85,7 @@ public class TestServiceListener {
         }
 
         @Override
-        public void store(@NotNull Event event, @NotNull String parentId) {
+        public void store(@NotNull Event event, @NotNull EventID parentId) throws IOException {
             this.event = event;
         }
 

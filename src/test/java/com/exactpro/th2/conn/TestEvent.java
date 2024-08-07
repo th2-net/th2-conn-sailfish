@@ -22,6 +22,7 @@ import com.exactpro.th2.common.grpc.EventBatch;
 import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.RawMessage;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
+import com.exactpro.th2.common.schema.message.DeliveryMetadata;
 import com.exactpro.th2.common.schema.message.MessageListener;
 import com.exactpro.th2.common.schema.message.MessageRouter;
 import com.exactpro.th2.common.schema.message.SubscriberMonitor;
@@ -34,8 +35,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -45,15 +48,16 @@ import static org.mockito.Mockito.mock;
 
 public class TestEvent {
 
-    private static final String rootID = "rootID";
-    private static final Map<EventType, String> parentIds = Map.of(EventType.ERROR, "errorEventID");
+    private static final String BOOK_NAME = "book";
+    private static final EventID ROOT_ID = EventUtils.toEventID(Instant.now(), BOOK_NAME, "rootID");
+    private static final Map<EventType, EventID> PARENT_IDS = Map.of(EventType.ERROR, EventUtils.toEventID(Instant.now(), BOOK_NAME, "errorEventID"));
 
     private static IServiceProxy serviceProxy;
     private static EventDispatcher eventDispatcher;
-    private static MessageSender messageSender;
+    private static ProtoMessageSender messageSender;
     private static MessageListener<RawMessageBatch> messageListener;
     private static Event event;
-    private static String parentId;
+    private static EventID parentId;
 
     @BeforeAll
     static void initMessages() throws IOException {
@@ -63,8 +67,7 @@ public class TestEvent {
 
         doAnswer(invocation -> {
             messageListener = invocation.getArgument(0);
-            return (SubscriberMonitor) () -> {
-            };
+            return (SubscriberMonitor) () -> { };
         }).when(router).subscribeAll(any(), any());
 
         eventDispatcher = mock(EventDispatcher.class);
@@ -73,7 +76,7 @@ public class TestEvent {
             EventType eventType = eventHolder.getType();
 
             eventDispatcher.store(eventHolder.getEvent(),
-                    parentIds.get(eventType) == null ? rootID : parentIds.get(eventType));
+                    PARENT_IDS.get(eventType) == null ? ROOT_ID : PARENT_IDS.get(eventType));
             return null;
         }).when(eventDispatcher).store(any());
 
@@ -83,15 +86,22 @@ public class TestEvent {
             return null;
         }).when(eventDispatcher).store(any(), any());
 
-        messageSender = new MessageSender(serviceProxy, router, eventDispatcher,
+        messageSender = new ProtoMessageSender(serviceProxy, router, eventDispatcher,
                 EventID.newBuilder().setId("stubID").build());
         messageSender.start();
     }
 
     @AfterEach
     void clear() {
+        Mockito.reset(serviceProxy);
         event = null;
         parentId = null;
+    }
+
+    private class StacklessRuntimeException extends RuntimeException {
+        public StacklessRuntimeException() {
+            super("ignore me", null, false, false);
+        }
     }
 
     public void sendIncorrectMessage() throws Exception {
@@ -99,25 +109,27 @@ public class TestEvent {
                 .addMessages(RawMessage.newBuilder().build())
                 .build();
 
-        doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
-        messageListener.handler("stubValue", rawMessageBatch);
+        doThrow(new StacklessRuntimeException()).when(serviceProxy).sendRaw(any(), any());
+        messageListener.handle(new DeliveryMetadata("stubValue", false), rawMessageBatch);
     }
 
     @Test
     public void eventHasBodyTest() throws Exception {
         sendIncorrectMessage();
 
-        ByteString body = event.toProto(EventUtils.toEventID(parentId)).getBody();
-        Assertions.assertEquals("[{\"data\":\"java.lang.IllegalStateException: error\",\"type\":\"message\"}," +
-                "{\"data\":\"Cannot send message. Message body in base64:\",\"type\":\"message\"},{\"data\":\"\"," +
-                "\"type\":\"message\"},{\"data\":\"java.lang.IllegalStateException: error\",\"type\":\"message\"}]", body.toStringUtf8());
+        ByteString body = event.toProto(parentId).getBody();
+        Assertions.assertEquals("[{\"data\":\"com.exactpro.th2.conn.TestEvent$StacklessRuntimeException: ignore me\"," +
+                "\"type\":\"message\"},{\"data\":\"Cannot send message. Message body in base64:\",\"type\":\"message\"}," +
+                "{\"data\":\"\",\"type\":\"message\"}," +
+                "{\"data\":\"com.exactpro.th2.conn.TestEvent$StacklessRuntimeException: ignore me\"," +
+                "\"type\":\"message\"}]", body.toStringUtf8());
     }
 
     @Test
     public void eventHasNameTest() throws Exception {
         sendIncorrectMessage();
 
-        String name = event.toProto(EventUtils.toEventID(parentId)).getName();
+        String name = event.toProto(parentId).getName();
         Assertions.assertEquals("Failed to send raw message", name);
     }
 
@@ -125,17 +137,16 @@ public class TestEvent {
     public void sentMessageWithParentEventIDTest() throws Exception {
         RawMessageBatch rawMessageBatch = RawMessageBatch.newBuilder()
                 .addMessages(RawMessage.newBuilder()
-                        .setParentEventId(EventID.newBuilder()
-                                .setId("RawMessageParentEventID")).build())
-                .build();
+                        .setParentEventId(EventUtils.toEventID(Instant.now(), BOOK_NAME, "RawMessageParentEventID"))
+                ).build();
 
         doThrow(new IllegalStateException("error")).when(serviceProxy).sendRaw(any(), any());
-        messageListener.handler("stubValue", rawMessageBatch);
+        messageListener.handle(new DeliveryMetadata("stubValue", false), rawMessageBatch);
+        // no message was sent because of different book name in parent event
+        Mockito.verifyZeroInteractions(serviceProxy);
 
-        event.addSubEvent(Event.start());
-
-        EventBatch eventBatch = event.toBatchProto(EventUtils.toEventID(parentId));
-        Assertions.assertEquals("RawMessageParentEventID", eventBatch.getParentEventId().getId());
+        com.exactpro.th2.common.grpc.Event eventBatch = event.toProto(parentId);
+        Assertions.assertEquals("RawMessageParentEventID", eventBatch.getParentId().getId());
     }
 
     @Test
@@ -143,7 +154,7 @@ public class TestEvent {
         sendIncorrectMessage();
         event.addSubEvent(Event.start());
 
-        EventBatch eventBatch = event.toBatchProto(EventUtils.toEventID(parentId));
+        EventBatch eventBatch = event.toBatchProto(parentId);
         Assertions.assertEquals("errorEventID", eventBatch.getParentEventId().getId());
     }
 

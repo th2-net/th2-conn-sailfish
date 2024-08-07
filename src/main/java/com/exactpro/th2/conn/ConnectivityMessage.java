@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2020-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,107 +15,83 @@
  */
 package com.exactpro.th2.conn;
 
-import static com.exactpro.sf.common.messages.MetadataExtensions.getMessageProperties;
-import static com.google.protobuf.TextFormat.shortDebugString;
-import static java.util.Objects.requireNonNull;
-import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
+import com.exactpro.sf.common.messages.IMessage;
+import com.exactpro.sf.common.messages.MetadataExtensions;
+import com.exactpro.th2.common.grpc.Direction;
+import com.exactpro.th2.common.grpc.MessageID;
+import com.google.protobuf.Timestamp;
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.google.protobuf.TextFormat.shortDebugString;
+import static java.util.Objects.requireNonNull;
 
-import com.exactpro.sf.common.messages.IMessage;
-import com.exactpro.sf.common.messages.IMetadata;
-import com.exactpro.sf.common.messages.MetadataExtensions;
-import com.exactpro.th2.common.grpc.ConnectionID;
-import com.exactpro.th2.common.grpc.Direction;
-import com.exactpro.th2.common.grpc.EventID;
-import com.exactpro.th2.common.grpc.MessageID;
-import com.exactpro.th2.common.grpc.RawMessage;
-import com.exactpro.th2.common.grpc.RawMessage.Builder;
-import com.exactpro.th2.common.grpc.RawMessageMetadata;
-import com.exactpro.th2.conn.utility.MetadataProperty;
-import com.exactpro.th2.conn.utility.SailfishMetadataExtensions;
-import com.google.protobuf.ByteString;
-import com.google.protobuf.Timestamp;
-
+@SuppressWarnings("ClassNamePrefixedWithPackageName")
 public class ConnectivityMessage {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConnectivityMessage.class);
-    public static final long MILLISECONDS_IN_SECOND = 1_000L;
-    public static final long NANOSECONDS_IN_MILLISECOND = 1_000_000L;
 
     private final List<IMessage> sailfishMessages;
+    private final MessageID messageId;
 
-    // This variables can be calculated in methods
-    private final MessageID messageID;
-    private final Timestamp timestamp;
+    private int totalBodySize = -1;
 
-    public ConnectivityMessage(List<IMessage> sailfishMessages, String sessionAlias, Direction direction, long sequence) {
-        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Message can't be null"));
+    public ConnectivityMessage(List<IMessage> sailfishMessages, MessageID.Builder messageIdBuilder) {
+        requireNonNull(sailfishMessages, "Messages can't be null");
+        requireNonNull(messageIdBuilder, "Message id builder can't be null");
         if (sailfishMessages.isEmpty()) {
-            throw new IllegalArgumentException("At least one sailfish messages must be passed. Session alias: " + sessionAlias + "; Direction: " + direction);
+            throw new IllegalArgumentException(String.format(
+                    "At least one sailfish message must be passed. Message id: '%s'",
+                    shortDebugString(messageIdBuilder)
+            ));
         }
-        messageID = createMessageID(createConnectionID(requireNonNull(sessionAlias, "Session alias can't be null")),
-                requireNonNull(direction, "Direction can't be null"), sequence);
-        timestamp = createTimestamp(sailfishMessages.get(0).getMetaData().getMsgTimestamp().getTime());
+        this.sailfishMessages = Collections.unmodifiableList(requireNonNull(sailfishMessages, "Message can't be null"));
+        LOGGER.warn("Sailfish transforms th2 message to real send message too slow, delay is about 10 milliseconds. Please add more hardware resources");
+        this.messageId = messageIdBuilder
+                .setTimestamp(createTimestamp())
+                .build();
+    }
+
+    public int calculateTotalBodySize() {
+        if (totalBodySize == -1) {
+            int totalSize = calculateTotalBodySize(sailfishMessages);
+            if (totalSize == 0) {
+                throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
+            }
+            totalBodySize = totalSize;
+        }
+        return totalBodySize;
+    }
+
+    public MessageID getMessageId() {
+        return messageId;
+    }
+
+    public String getBookName() {
+        return messageId.getBookName();
     }
 
     public String getSessionAlias() {
-        return messageID.getConnectionId().getSessionAlias();
+        return messageId.getConnectionId().getSessionAlias();
     }
 
-    public RawMessage convertToProtoRawMessage() {
-        Builder builder = RawMessage.newBuilder();
-
-        RawMessageMetadata.Builder rawMessageMetadata = createRawMessageMetadataBuilder(messageID, timestamp);
-        int totalSize = calculateTotalBodySize(sailfishMessages);
-        if (totalSize == 0) {
-            throw new IllegalStateException("All messages has empty body: " + sailfishMessages);
-        }
-
-        byte[] bodyData = new byte[totalSize];
-        int index = 0;
-        for (IMessage message : sailfishMessages) {
-            IMetadata sfMetadata = message.getMetaData();
-            if (SailfishMetadataExtensions.contains(sfMetadata, MetadataProperty.PARENT_EVENT_ID)) {
-                EventID parentEventID = SailfishMetadataExtensions.getParentEventID(sfMetadata);
-                // Should never happen because the Sailfish does not support sending multiple messages at once
-                if (builder.hasParentEventId()) {
-                    LOGGER.warn("The parent ID is already set for message {}. Current ID: {}, New ID: {}", messageID, builder.getParentEventId(), parentEventID);
-                }
-                builder.setParentEventId(parentEventID);
-            }
-            rawMessageMetadata.putAllProperties(defaultIfNull(getMessageProperties(sfMetadata), Collections.emptyMap()));
-
-            byte[] rawMessage = MetadataExtensions.getRawMessage(sfMetadata);
-            if (rawMessage == null) {
-                LOGGER.warn("The message has empty raw data {}: {}", message.getName(), message);
-                continue;
-            }
-            System.arraycopy(rawMessage, 0, bodyData, index, rawMessage.length);
-            index += rawMessage.length;
-        }
-
-        return builder.setMetadata(rawMessageMetadata)
-                        .setBody(ByteString.copyFrom(bodyData))
-                        .build();
-    }
-
-    public MessageID getMessageID() {
-        return messageID;
-    }
-
-    public long getSequence() {
-        return messageID.getSequence();
+    public String getGroup() {
+        String group = messageId.getConnectionId().getSessionGroup();
+        return group.isEmpty() ? getSessionAlias() : group;
     }
 
     public Direction getDirection() {
-        return messageID.getDirection();
+        return messageId.getDirection();
+    }
+
+    public long getSequence() {
+        return messageId.getSequence();
     }
 
     public List<IMessage> getSailfishMessages() {
@@ -125,8 +101,7 @@ public class ConnectivityMessage {
     @Override
     public String toString() {
         return new ToStringBuilder(this)
-                .append("messageID", shortDebugString(messageID))
-                .append("timestamp", shortDebugString(timestamp))
+                .append("messageId", shortDebugString(messageId))
                 .append("sailfishMessages", sailfishMessages.stream().map(IMessage::getName).collect(Collectors.joining(", ")))
                 .toString();
     }
@@ -139,31 +114,11 @@ public class ConnectivityMessage {
                 }).sum();
     }
 
-    private static ConnectionID createConnectionID(String sessionAlias) {
-        return ConnectionID.newBuilder()
-                .setSessionAlias(sessionAlias)
-                .build();
-    }
-
-    private static MessageID createMessageID(ConnectionID connectionId, Direction direction, long sequence) {
-        return MessageID.newBuilder()
-                .setConnectionId(connectionId)
-                .setDirection(direction)
-                .setSequence(sequence)
-                .build();
-    }
-
-    private static RawMessageMetadata.Builder createRawMessageMetadataBuilder(MessageID messageID, Timestamp timestamp) {
-        return RawMessageMetadata.newBuilder()
-                .setId(messageID)
-                .setTimestamp(timestamp);
-    }
-
-    // TODO: Required nanosecond accuracy
-    private static Timestamp createTimestamp(long milliseconds) {
+    private static Timestamp createTimestamp() {
+        Instant now = Instant.now();
         return Timestamp.newBuilder()
-                .setSeconds(milliseconds / MILLISECONDS_IN_SECOND)
-                .setNanos((int) (milliseconds % MILLISECONDS_IN_SECOND * NANOSECONDS_IN_MILLISECOND))
+                .setSeconds(now.getEpochSecond())
+                .setNanos(now.getNano())
                 .build();
     }
 }

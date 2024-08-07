@@ -18,38 +18,62 @@ package com.exactpro.th2.conn
 
 import com.exactpro.sf.common.impl.messages.DefaultMessageFactory
 import com.exactpro.sf.common.messages.IMessage
+import com.exactpro.th2.common.grpc.ConnectionID
 import com.exactpro.th2.common.grpc.Direction
 import com.exactpro.th2.common.grpc.EventID
 import com.exactpro.th2.common.grpc.RawMessage
 import com.exactpro.th2.common.message.toJson
+import com.exactpro.th2.common.schema.box.configuration.BoxConfiguration
+import com.exactpro.th2.common.schema.factory.CommonFactory
+import com.exactpro.th2.conn.saver.impl.ProtoMessageSaver
 import com.exactpro.th2.conn.utility.parentEventID
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito
+import org.mockito.Mockito.`when`
 
 class TestConnectivityMessage {
     @Test
     fun `conversion to raw message`() {
+        val commonFactory = Mockito.mock(CommonFactory::class.java)
+        `when`(commonFactory.newMessageIDBuilder()).thenCallRealMethod();
+        val boxConfiguration = BoxConfiguration()
+        `when`(commonFactory.boxConfiguration).thenReturn(boxConfiguration)
+
+        val id = "id"
+        val firstMessageBody = byteArrayOf(42, 43)
+        val secondMessageBody = byteArrayOf(44, 45)
+        val thirdMessageBody = byteArrayOf(46, 47)
+        val sessionAlias = "test"
+        val direction = Direction.SECOND
+        val sequence = 1L
         val connectivityMessage = ConnectivityMessage(
             listOf(
-                createMessage(byteArrayOf(42, 43)),
-                createMessage(byteArrayOf(44, 45)).apply {
-                    metaData.parentEventID = EventID.newBuilder().setId("id").build()
+                createMessage(firstMessageBody),
+                createMessage(secondMessageBody).apply {
+                    metaData.parentEventID = EventID.newBuilder().setId(id).build()
                 },
-                createMessage(byteArrayOf(46, 47))
+                createMessage(thirdMessageBody)
             ),
-            "test",
-            Direction.SECOND,
-            1L
+            commonFactory.newMessageIDBuilder()
+                .setConnectionId(ConnectionID.newBuilder().setSessionAlias(sessionAlias))
+                .setDirection(direction)
+                .setSequence(sequence)
         )
 
-        val rawMessage: RawMessage = connectivityMessage.convertToProtoRawMessage()
-        assertArrayEquals(byteArrayOf(42, 43, 44, 45, 46, 47), rawMessage.body.toByteArray())  { "RawMessage: " + rawMessage.toJson() }
-        assertEquals(EventID.newBuilder().setId("id").build(), rawMessage.parentEventId)  { "RawMessage: " + rawMessage.toJson() }
+        val rawMessage: RawMessage = ProtoMessageSaver.convertToProtoRawMessage(connectivityMessage)
+        val rawMessageAsString = "RawMessage: " + rawMessage.toJson()
+        assertArrayEquals(
+            firstMessageBody + secondMessageBody + thirdMessageBody,
+            rawMessage.body.toByteArray()
+        ) { rawMessageAsString }
+        assertEquals(EventID.newBuilder().setId(id).build(), rawMessage.parentEventId) { rawMessageAsString }
         with(rawMessage.metadata.id) {
-            assertEquals(1L, sequence) { "RawMessage: " + rawMessage.toJson() }
-            assertEquals(Direction.SECOND, direction)  { "RawMessage: " + rawMessage.toJson() }
+            assertEquals(boxConfiguration.bookName, bookName) { rawMessageAsString }
+            assertEquals(sessionAlias, connectionId.sessionAlias) { rawMessageAsString }
+            assertEquals(direction, direction) { rawMessageAsString }
+            assertEquals(sequence, sequence) { rawMessageAsString }
         }
     }
 

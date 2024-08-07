@@ -20,7 +20,6 @@ import static com.exactpro.th2.conn.utility.MetadataProperty.PARENT_EVENT_ID;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.contains;
 import static com.exactpro.th2.conn.utility.SailfishMetadataExtensions.getParentEventID;
 import static io.reactivex.rxjava3.plugins.RxJavaPlugins.createSingleScheduler;
-import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.repeat;
 import static org.apache.commons.lang3.ClassUtils.primitiveToWrapper;
@@ -31,9 +30,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,6 +43,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.exactpro.th2.conn.saver.MessageSaver;
+import com.exactpro.th2.conn.saver.impl.ProtoMessageSaver;
+import com.exactpro.th2.conn.saver.impl.TransportMessageSever;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,13 +66,12 @@ import com.exactpro.sf.externalapi.ISettingsProxy;
 import com.exactpro.sf.externalapi.ServiceFactory;
 import com.exactpro.sf.externalapi.impl.ServiceFactoryException;
 import com.exactpro.th2.common.event.Event;
+import com.exactpro.th2.common.grpc.ConnectionID;
 import com.exactpro.th2.common.grpc.Direction;
 import com.exactpro.th2.common.grpc.EventBatch;
-import com.exactpro.th2.common.grpc.EventID;
 import com.exactpro.th2.common.grpc.RawMessageBatch;
 import com.exactpro.th2.common.schema.factory.CommonFactory;
 import com.exactpro.th2.common.schema.message.MessageRouter;
-import com.exactpro.th2.common.schema.message.QueueAttribute;
 import com.exactpro.th2.conn.configuration.ConnectivityConfiguration;
 import com.exactpro.th2.conn.events.EventDispatcher;
 import com.exactpro.th2.conn.events.EventType;
@@ -76,6 +81,7 @@ import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.exceptions.Exceptions;
+import io.reactivex.rxjava3.flowables.ConnectableFlowable;
 import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.processors.FlowableProcessor;
 import io.reactivex.rxjava3.processors.UnicastProcessor;
@@ -113,7 +119,6 @@ public class MicroserviceMain {
 
         File workspaceFolder = new File(configuration.getWorkspaceFolder());
 
-        Map<Direction, AtomicLong> directionToSequence = getActualSequences();
         int exitCode = 0;
 
         try {
@@ -137,33 +142,58 @@ public class MicroserviceMain {
 
             MessageRouter<EventBatch> eventBatchRouter = factory.getEventBatchRouter();
 
-            var rootEvent = Event.start().endTimestamp()
+            var rootEvent = Event
+                    .start()
+                    .endTimestamp()
                     .name("Connectivity '" + configuration.getSessionAlias() + "' " + Instant.now())
                     .type("Microservice");
-            String rootEventID = storeEvent(eventBatchRouter, rootEvent).getId();
+            var rootEventId = storeEvent(eventBatchRouter, rootEvent, factory.getBoxConfiguration().getBookName());
 
-            var errorEventsRoot = Event.start().endTimestamp()
+            var errorEventsRoot = Event
+                    .start()
+                    .endTimestamp()
                     .name("Errors")
                     .type("ConnectivityErrors");
-            storeEvent(eventBatchRouter, errorEventsRoot, rootEventID);
+            var errorEventsRootId = storeEvent(eventBatchRouter, errorEventsRoot, rootEventId);
 
-            var serviceEventsRoot = Event.start().endTimestamp()
+            var serviceEventsRoot = Event
+                    .start()
+                    .endTimestamp()
                     .name("ServiceEvents")
                     .type("ConnectivityServiceEvents");
-            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
+            var serviceEventsRootId = storeEvent(eventBatchRouter, serviceEventsRoot, rootEventId);
 
-            var untrackedSentMessages = Event.start().endTimestamp()
+            var untrackedSentMessages = Event
+                    .start()
+                    .endTimestamp()
                     .name("UntrackedMessages")
                     .description("Contains messages that we send via this connectivity but does not have attacked parent event ID")
                     .type("ConnectivityUntrackedMessages");
-            storeEvent(eventBatchRouter, serviceEventsRoot, rootEventID);
+            var untrackedSentMessagesId = storeEvent(eventBatchRouter, untrackedSentMessages, rootEventId);
 
-            var eventDispatcher = EventDispatcher.createDispatcher(eventBatchRouter, rootEventID, Map.of(
-                    EventType.ERROR, errorEventsRoot.getId(),
-                    EventType.SERVICE_EVENT, serviceEventsRoot.getId()
-            ));
+            var eventDispatcher = EventDispatcher.createDispatcher(
+                    eventBatchRouter,
+                    rootEventId,
+                    Map.of(
+                            EventType.ERROR, errorEventsRootId,
+                            EventType.SERVICE_EVENT, serviceEventsRootId
+                    )
+            );
 
-            IServiceListener serviceListener = new ServiceListener(directionToSequence, configuration.getSessionAlias(), processor, eventDispatcher);
+            IServiceListener serviceListener = new ServiceListener(
+                    getActualSequences(),
+                    () -> {
+                        ConnectionID.Builder connectionIdBuilder = ConnectionID.newBuilder()
+                                .setSessionAlias(configuration.getSessionAlias());
+                        if (StringUtils.isNotBlank(configuration.getSessionGroup())) {
+                            connectionIdBuilder.setSessionGroup(configuration.getSessionGroup());
+                        }
+                        return finalFactory.newMessageIDBuilder()
+                                .setConnectionId(connectionIdBuilder);
+                    },
+                    processor,
+                    eventDispatcher
+            );
             IServiceProxy serviceProxy = loadService(serviceFactory, factory, configuration, serviceListener);
             disposer.register(() -> {
                 LOGGER.info("Stop service proxy");
@@ -173,17 +203,47 @@ public class MicroserviceMain {
 
             MessageRouter<RawMessageBatch> rawMessageRouter = factory.getMessageRouterRawBatch();
 
-            MessageSender messageSender = new MessageSender(serviceProxy, rawMessageRouter, eventDispatcher,
-                    EventID.newBuilder().setId(untrackedSentMessages.getId()).build()
+            List<AbstractMessageSender> senders = new ArrayList<>(2);
+
+            ProtoMessageSender protoMessageSender = new ProtoMessageSender(
+                    serviceProxy,
+                    rawMessageRouter,
+                    eventDispatcher,
+                    untrackedSentMessagesId
             );
+            senders.add(protoMessageSender);
             disposer.register(() -> {
-                LOGGER.info("Stop 'message send' listener");
-                messageSender.stop();
+                LOGGER.info("Stop proto 'message send' listener");
+                protoMessageSender.stop();
             });
 
-            createPipeline(processor, processor::onComplete, eventBatchRouter, rawMessageRouter,
-                    configuration.getMaxMessageBatchSize(), configuration.getMaxMessageFlushTime(), configuration.isEnableMessageSendingEvent())
-                    .blockingSubscribe(new TermibnationSubscriber<>(serviceProxy, messageSender));
+            if (configuration.isUseTransport()) {
+                // we will listen for transport only if we are configured to
+                TransportMessageSender transportMessageSender = new TransportMessageSender(
+                        serviceProxy,
+                        factory.getTransportGroupBatchRouter(),
+                        eventDispatcher,
+                        untrackedSentMessagesId
+                );
+                senders.add(transportMessageSender);
+                disposer.register(() -> {
+                    LOGGER.info("Stop transport 'message send' listener");
+                    transportMessageSender.stop();
+                });
+            }
+
+            MessageSaver messageSaver = configuration.isUseTransport()
+                    ? new TransportMessageSever(factory.getTransportGroupBatchRouter())
+                    : new ProtoMessageSaver(factory.getMessageRouterMessageGroupBatch());
+
+            createPipeline(
+                    processor,
+                    processor::onComplete,
+                    eventBatchRouter,
+                    messageSaver,
+                    configuration.getMaxMessageBatchSize(),
+                    configuration.getMaxMessageFlushTime(), configuration.isEnableMessageSendingEvent()
+            ).blockingSubscribe(new TerminationSubscriber<>(serviceProxy, senders));
         } catch (SailfishURIException | WorkspaceSecurityException e) { LOGGER.error(e.getMessage(), e); exitCode = 2;
         } catch (IOException e) { LOGGER.error(e.getMessage(), e); exitCode = 3;
         } catch (IllegalArgumentException e) { LOGGER.error(e.getMessage(), e); exitCode = 4;
@@ -208,46 +268,51 @@ public class MicroserviceMain {
         return parameterValue;
     }
 
-    private static @NonNull Flowable<Flowable<ConnectivityMessage>> createPipeline(
-            Flowable<ConnectivityMessage> flowable, Action terminateFlowable,
+    private static @NonNull Flowable<ConnectivityMessage> createPipeline(
+            Flowable<ConnectivityMessage> flowable,
+            Action terminateFlowable,
             MessageRouter<EventBatch> eventBatchRouter,
-            MessageRouter<RawMessageBatch> rawMessageRouter,
+            MessageSaver messageSaver,
             int maxMessageBatchSize,
             long maxMessageFlushTime,
-            boolean enableMessageSendingEvent) {
+            boolean enableMessageSendingEvent
+    ) {
         LOGGER.info("AvailableProcessors '{}'", Runtime.getRuntime().availableProcessors());
 
-        return flowable
-                .doOnNext(message -> LOGGER.trace(
-                        "Message before observeOn with sequence {} and direction {}",
-                        message.getSequence(),
-                        message.getDirection()
-                ))
-                .observeOn(PIPELINE_SCHEDULER)
-                .doOnNext(connectivityMessage -> LOGGER.debug("Start handling connectivity message {}", connectivityMessage))
-                .groupBy(ConnectivityMessage::getDirection)
-                .map(group -> {
-                    @NonNull Direction direction = requireNonNull(group.getKey(), "Direction can't be null");
-                    Flowable<ConnectivityMessage> messageConnectable = group
-                            .doOnNext(message -> LOGGER.trace(
-                                    "Message inside map with sequence {} and direction {}",
-                                    message.getSequence(),
-                                    message.getDirection()
-                            ))
-                            .doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
-                            .publish()
-                            .refCount(enableMessageSendingEvent && direction == Direction.SECOND ? 2 : 1);
+		ConnectableFlowable<ConnectivityMessage> messageConnectable = flowable
+				.doOnNext(message -> {
+					LOGGER.trace(
+							"Message before observeOn with sequence {} and direction {}",
+							message.getSequence(),
+							message.getDirection()
+					);
+				})
+				.observeOn(PIPELINE_SCHEDULER)
+				.doOnNext(connectivityMessage -> {
+					LOGGER.debug("Start handling connectivity message {}", connectivityMessage);
+					LOGGER.trace(
+							"Message inside map with sequence {} and direction {}",
+							connectivityMessage.getSequence(),
+							connectivityMessage.getDirection());
+				})
+				.doOnCancel(terminateFlowable) // This call is required for terminate the publisher and prevent creation another group
+				.publish();
 
-                    if (enableMessageSendingEvent && direction == Direction.SECOND) {
-                        subscribeToSendMessage(eventBatchRouter, messageConnectable);
-                    }
-                    createPackAndPublishPipeline(direction, messageConnectable, rawMessageRouter, maxMessageBatchSize, maxMessageFlushTime);
+        if (enableMessageSendingEvent) {
+            subscribeToSendMessage(eventBatchRouter, messageConnectable);
+        }
 
-                    return messageConnectable;
-                });
+		createPackAndPublishPipeline(messageConnectable, messageSaver, maxMessageBatchSize, maxMessageFlushTime);
+
+        messageConnectable.connect();
+
+		return messageConnectable;
     }
 
-    private static void subscribeToSendMessage(MessageRouter<EventBatch> eventBatchRouter, Flowable<ConnectivityMessage> messageConnectable) {
+    private static void subscribeToSendMessage(
+            MessageRouter<EventBatch> eventBatchRouter,
+            Flowable<ConnectivityMessage> messageConnectable
+    ) {
         //noinspection ResultOfMethodCallIgnored
         messageConnectable
                 .subscribe(connectivityMessage -> {
@@ -256,6 +321,9 @@ public class MicroserviceMain {
                     // Sailfish does not support sending multiple messages at once.
                     // So we should send only a single event here.
                     // But just in case we are wrong, we add checking for sending multiple events
+                    if (connectivityMessage.getDirection() != Direction.SECOND) {
+                        return;
+                    }
                     boolean sent = false;
                     for (IMessage message : connectivityMessage.getSailfishMessages()) {
                         if (!contains(message.getMetaData(), PARENT_EVENT_ID)) {
@@ -264,22 +332,23 @@ public class MicroserviceMain {
                         if (sent) {
                             LOGGER.warn("The connectivity message has more than one sailfish message with parent event ID: {}", connectivityMessage);
                         }
-                        Event event = Event.start().endTimestamp()
+                        Event event = Event
+                                .start()
+                                .endTimestamp()
                                 .name("Send '" + message.getName() + "' message")
                                 .type("Send message")
-                                .messageID(connectivityMessage.getMessageID());
+                                .messageID(connectivityMessage.getMessageId());
                         LOGGER.debug("Sending event {} related to message with sequence {}", event.getId(), connectivityMessage.getSequence());
-                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()).getId());
+                        storeEvent(eventBatchRouter, event, getParentEventID(message.getMetaData()));
                         sent = true;
                     }
                 });
     }
 
-    private static void createPackAndPublishPipeline(Direction direction, Flowable<ConnectivityMessage> messageConnectable,
-            MessageRouter<RawMessageBatch> rawMessageRouter, int maxMessageBatchSize, long maxMessageFlushTime) {
+    private static void createPackAndPublishPipeline(Flowable<ConnectivityMessage> messageConnectable,
+            MessageSaver messageSaver, int maxMessageBatchSize, long maxMessageFlushTime) {
 
-        LOGGER.info("Map group {}", direction);
-        Flowable<ConnectivityBatch> batchConnectable = messageConnectable
+        messageConnectable
                 .doOnNext(message -> LOGGER.trace(
                         "Message before window with sequence {} and direction {}",
                         message.getSequence(),
@@ -296,14 +365,9 @@ public class MicroserviceMain {
                                 .collect(Collectors.toList()));
                     }
                 })
-                .publish()
-                .refCount(1);
-
-        batchConnectable
                 .subscribe(batch -> {
                     try {
-                        RawMessageBatch rawBatch = batch.convertToProtoRawBatch();
-                        rawMessageRouter.sendAll(rawBatch, (direction == Direction.FIRST ? QueueAttribute.FIRST : QueueAttribute.SECOND).toString());
+                        messageSaver.save(batch);
                     } catch (Exception e) {
                         if (LOGGER.isErrorEnabled()) {
                             LOGGER.error("Cannot send batch with sequences: {}",
@@ -312,9 +376,9 @@ public class MicroserviceMain {
                         }
                     }
                 });
-        LOGGER.info("Subscribed to transfer raw batch group {}", direction);
+        LOGGER.info("Subscribed to transfer raw batch group");
 
-        LOGGER.info("Connected to publish batches group {}", direction);
+        LOGGER.info("Connected to publish batches group");
     }
 
     private interface Disposable {
@@ -376,17 +440,53 @@ public class MicroserviceMain {
                 settings.setParameterValue(settingName, castValue);
             }
 
-            for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
-                var dictionaryType = com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name());
-                try (InputStream stream = commonFactory.readDictionary(dictionaryType)) {
-                    SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
-                    settings.setDictionary(sfDictionaryType, uri);
-                }
-            }
+            loadDictionaries(serviceFactory, commonFactory, configuration, settings);
 
             return service;
         } catch (ConversionException | ServiceFactoryException e) {
             throw new RuntimeException(String.format("Could not load service '%s'", configuration.getName()), e);
+        }
+    }
+
+    private static void loadDictionaries(IServiceFactory serviceFactory, CommonFactory commonFactory, ConnectivityConfiguration configuration, ISettingsProxy settings) throws IOException, ServiceFactoryException {
+        var dictionariesToAliasMap = configuration.getDictionariesToAliasMap();
+        if (dictionariesToAliasMap != null && !dictionariesToAliasMap.isEmpty()) {
+            loadDictionariesByAliases(serviceFactory, commonFactory, settings, dictionariesToAliasMap);
+        } else {
+            loadDictionariesByTypes(serviceFactory, commonFactory, settings);
+        }
+    }
+
+    private static void loadDictionariesByTypes(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings) throws IOException, ServiceFactoryException {
+        LOGGER.debug("Loading dictionaries by types...");
+        for (DictionaryType sfDictionaryType : settings.getDictionaryTypes()) {
+            var dictionaryType = com.exactpro.th2.common.schema.dictionary.DictionaryType.valueOf(sfDictionaryType.name());
+            try (InputStream stream = commonFactory.readDictionary(dictionaryType)) {
+                SailfishURI uri = serviceFactory.registerDictionary(sfDictionaryType.name(), stream, true);
+                settings.setDictionary(sfDictionaryType, uri);
+            }
+        }
+    }
+
+    private static void loadDictionariesByAliases(IServiceFactory serviceFactory, CommonFactory commonFactory, ISettingsProxy settings, Map<String, String> dictionariesToAliasMap) throws IOException, ServiceFactoryException {
+        LOGGER.debug("Loading dictionaries by aliases");
+        for (DictionaryType dictionaryTypeFromSettings : settings.getDictionaryTypes()) {
+            var typeWithAliasFromConfig = dictionariesToAliasMap.entrySet().stream()
+                    .filter(entry -> entry.getKey().compareToIgnoreCase(dictionaryTypeFromSettings.toString()) == 0)
+                    .findAny();
+
+            if (typeWithAliasFromConfig.isPresent()) {
+                String alias = typeWithAliasFromConfig.get().getValue();
+                try (InputStream inputStream = commonFactory.loadDictionary(alias)) {
+                    SailfishURI uri = serviceFactory.registerDictionary(dictionaryTypeFromSettings.name(), inputStream, true);
+                    settings.setDictionary(dictionaryTypeFromSettings, uri);
+                }
+            } else {
+                String foundedTypes = dictionariesToAliasMap.entrySet().stream().map(entry -> entry.getKey() + " with alias " + entry.getValue()).collect(Collectors.joining(", "));
+                String expectedTypes = settings.getDictionaryTypes().stream().map(Enum::toString).collect(Collectors.joining(", "));
+                LOGGER.error("Dictionary with type {} not found in the config. Expected: {}, found {}", dictionaryTypeFromSettings, expectedTypes, foundedTypes);
+                throw new IllegalArgumentException("Dictionary type " + dictionaryTypeFromSettings + " can't be loaded");
+            }
         }
     }
 
@@ -407,14 +507,14 @@ public class MicroserviceMain {
     }
 
     @SuppressWarnings("ParameterNameDiffersFromOverriddenParameter")
-    private static class TermibnationSubscriber<T> extends DisposableSubscriber<T> {
+    private static class TerminationSubscriber<T> extends DisposableSubscriber<T> {
 
         private final IServiceProxy serviceProxy;
-        private final MessageSender messageSender;
+        private final List<AbstractMessageSender> messageSenders;
 
-        public TermibnationSubscriber(IServiceProxy serviceProxy, MessageSender messageSender) {
+        public TerminationSubscriber(IServiceProxy serviceProxy, List<AbstractMessageSender> messageSenders) {
             this.serviceProxy = serviceProxy;
-            this.messageSender = messageSender;
+            this.messageSenders = Objects.requireNonNull(messageSenders, "message senders list");
         }
 
         @Override
@@ -423,7 +523,11 @@ public class MicroserviceMain {
             try {
                 LOGGER.info("Subscribed to pipeline");
                 serviceProxy.start();
-                messageSender.start();
+                LOGGER.info("Service started. Starting message sender");
+                for (AbstractMessageSender messageSender : messageSenders) {
+                    messageSender.start();
+                }
+                LOGGER.info("Subscription finished");
             } catch (Exception e) {
                 LOGGER.error("Services starting failure", e);
                 Exceptions.propagate(e);
