@@ -1,31 +1,11 @@
-import com.github.jk1.license.filter.LicenseBundleNormalizer
-import com.github.jk1.license.render.JsonReportRenderer
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
-    id 'com.palantir.docker' version '0.25.0'
-    id 'org.jetbrains.kotlin.jvm' version '1.8.22'
-    id 'application'
-    id "org.owasp.dependencycheck" version "8.3.1"
-    id "com.gorylenko.gradle-git-properties" version "2.4.1"
-    id 'com.github.jk1.dependency-license-report' version '2.5'
-    id "de.undercouch.download" version "5.4.0"
-}
-
-dependencyCheck {
-    formats = ['SARIF', 'JSON', 'HTML']
-    failBuildOnCVSS = 5
-//    suppressionFile = file('suppressions.xml')
-    analyzers {
-        assemblyEnabled = false
-        nugetconfEnabled = false
-        nodeEnabled = false
-    }
+    id "application"
+    id "org.jetbrains.kotlin.jvm" version "1.8.22"
+    id "com.exactpro.th2.gradle.component" version "0.1.1"
 }
 
 ext {
-    sailfishVersion = '3.3.132'
+    sailfishVersion = '3.3.241'
 }
 
 ext.excludeSailfish = { rcd ->
@@ -84,37 +64,16 @@ repositories {
     }
 }
 
-jar {
-    manifest {
-        attributes(
-            'Created-By':               "${System.getProperty('java.version')} (${System.getProperty('java.vendor')})",
-            'Specification-Title':      '',
-            'Specification-Vendor':     'Exactpro Systems LLC',
-            'Implementation-Title':     project.archivesBaseName,
-            'Implementation-Vendor':    'Exactpro Systems LLC',
-            'Implementation-Vendor-Id': 'com.exactpro',
-            'Implementation-Version':   project.version
-        )
-    }
-}
-
-sourceCompatibility = 11
-targetCompatibility = 11
-
-tasks.withType(KotlinCompile).configureEach {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_11)
-    }
+kotlin {
+    jvmToolchain(11)
 }
 
 dependencies {
-    api platform('com.exactpro.th2:bom:4.5.0')
+    implementation 'com.exactpro.th2:common:5.14.0-dev'
+    implementation 'com.exactpro.th2:sailfish-utils:4.1.1-dev'
+    implementation 'com.exactpro.th2:common-utils:2.2.3-dev'
 
-    implementation 'com.exactpro.th2:common:5.4.0-dev'
-    implementation 'com.exactpro.th2:sailfish-utils:4.1.0-dev'
-    implementation 'com.exactpro.th2:common-utils:2.2.0-dev'
-
-    implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.0.4'
+    implementation group: 'io.reactivex.rxjava3', name: 'rxjava', version: '3.1.8'
 
     implementation 'org.slf4j:slf4j-api'
 
@@ -125,7 +84,7 @@ dependencies {
     testImplementation('org.apache.logging.log4j:log4j-slf4j2-impl') {
         because('logging in testing')
     }
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
 }
 
 test {
@@ -137,39 +96,4 @@ test {
 
 application {
     mainClass.set('com.exactpro.th2.conn.MicroserviceMain')
-}
-
-applicationName = 'service'
-
-distTar {
-    archiveFileName.set("${applicationName}.tar")
-}
-
-dockerPrepare {
-    dependsOn distTar
-}
-
-docker {
-    copySpec.from(tarTree("$buildDir/distributions/${applicationName}.tar"))
-}
-
-licenseReport {
-    def licenseNormalizerBundlePath = "$buildDir/license-normalizer-bundle.json"
-
-    if (!file(licenseNormalizerBundlePath).exists()) {
-        download.run {
-            src 'https://raw.githubusercontent.com/th2-net/.github/main/license-compliance/gradle-license-report/license-normalizer-bundle.json'
-            dest "$buildDir/license-normalizer-bundle.json"
-            overwrite false
-        }
-    }
-
-    filters = [
-            new LicenseBundleNormalizer(licenseNormalizerBundlePath, false)
-    ]
-    renderers = [
-            new JsonReportRenderer('licenses.json', false),
-    ]
-    excludeOwnGroup = false
-    allowedLicensesFile = new URL("https://raw.githubusercontent.com/th2-net/.github/main/license-compliance/gradle-license-report/allowed-licenses.json")
 }
